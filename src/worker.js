@@ -3,6 +3,8 @@ import { handleCrm } from "./crm.js";
 import { handleAuth } from "./auth/worker.js";
 import { authPepper } from "./auth/password.js";
 import { checkMigrated } from "./d1.js";
+import { bundledAssets } from "./generated/asset-map.js";
+import { fetchAsset, publicAsset } from "./static-assets.js";
 import {
   getSession,
   validCsrf,
@@ -13,24 +15,6 @@ import {
   secureResponse,
   json,
 } from "./auth/http.js";
-
-const assetTypes = {
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-  ".map": "application/json",
-};
-function publicAsset(path) {
-  return (
-    /^\/assets\/[A-Za-z0-9_.-]+$/.test(path) &&
-    Object.keys(assetTypes).some((ext) => path.endsWith(ext))
-  );
-}
 function errorResponse(error, api, path) {
   const conflict =
     /UNIQUE constraint failed|FOREIGN KEY constraint failed/i.test(
@@ -74,6 +58,7 @@ export default {
         return secureResponse(
           errorResponse(new DomainError("Method not allowed.", 405), api, path),
           api,
+          request,
         );
       if (!validateOrigin(request, env))
         throw new DomainError(
@@ -101,6 +86,7 @@ export default {
           return secureResponse(
             json({ status: "ok", service: "Pulse CRM", version: 1 }),
             true,
+            request,
           );
         if (request.method !== "GET" && request.method !== "HEAD") {
           if (!sameOrigin(request))
@@ -126,6 +112,7 @@ export default {
               body,
             }),
             true,
+            request,
           );
         const session = await getSession(scoped.DB, request);
         if (!session) throw new DomainError("Please sign in to continue.", 401);
@@ -146,10 +133,15 @@ export default {
             url,
           }),
           true,
+          request,
         );
       }
       if (publicAsset(path))
-        return secureResponse(await env.ASSETS.fetch(request), false);
+        return secureResponse(
+          await fetchAsset(request, env, path, bundledAssets),
+          false,
+          request,
+        );
       // HTML and any unknown resource never become a public unauthenticated SPA fallback.
       if (request.method !== "GET" && request.method !== "HEAD")
         throw new DomainError("API route not found.", 404);
@@ -157,26 +149,38 @@ export default {
       if (path === "/signin" && session)
         return secureResponse(
           Response.redirect(new URL("/", request.url), 302),
+          false,
+          request,
         );
       if ((path === "/" || path === "/index.html") && !session)
         return secureResponse(
           Response.redirect(new URL("/signin", request.url), 302),
+          false,
+          request,
         );
       if (path === "/signin" || path === "/" || path === "/index.html") {
         // Public sign-in shell contains only application code; all customer data stays behind the API session gate.
-        const asset = await env.ASSETS.fetch(
-          new Request(new URL("/index.html", request.url), { method: "GET" }),
+        const asset = await fetchAsset(
+          request,
+          env,
+          "/index.html",
+          bundledAssets,
+          "GET",
         );
         if (!asset.ok)
           throw new DomainError(
             "Build the React client with npm run build before serving the Worker.",
             503,
           );
-        return secureResponse(asset);
+        return secureResponse(asset, false, request);
       }
-      return secureResponse(json({ error: "Resource not found." }, 404), false);
+      return secureResponse(
+        json({ error: "Resource not found." }, 404),
+        false,
+        request,
+      );
     } catch (error) {
-      return secureResponse(errorResponse(error, api, path), api);
+      return secureResponse(errorResponse(error, api, path), api, request);
     }
   },
 };

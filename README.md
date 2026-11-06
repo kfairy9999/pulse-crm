@@ -21,8 +21,9 @@ Node 22.13+ and npm are needed for build/test tooling; the deployed runtime is F
 npm ci
 npm run build
 npm test             # legacy regression suite + actual workerd/D1 tests
-npm run test:smoke   # disposable local D1 + local Wrangler HTTP checks, no account login
-npm run check        # build + wrangler deploy --dry-run, NOT a deployment
+npm run test:smoke   # disposable local D1 + local Wrangler HTTP checks, static-assets mode
+npm run test:smoke:bundle  # same HTTP checks against the no-assets bundled Worker
+npm run check        # build + both dry-runs + upload package, NOT a deployment
 npm audit --audit-level=high
 ```
 
@@ -37,7 +38,7 @@ No CLI account login is needed for local operations. `npm start`/`npm run dev` a
 
 ## Deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md). `wrangler.jsonc` intentionally has unresolved production D1 ID and exact HTTPS origin placeholders. Missing bindings, migrations, origin, or managed auth secret fail closed. Free-tier CPU and provider persistence still need live verification after an authorized deployment; local tests do not establish an SLA or guarantee 10 ms CPU for every dataset/device.
+See [DEPLOYMENT.md](DEPLOYMENT.md). The connector package is `deploy/cloudflare-upload/`: one Worker module with the shell and hashed assets embedded, plus multipart metadata that keeps the existing D1 binding and any secrets already stored. `wrangler.jsonc` still serves `dist/` through the `ASSETS` binding for local development. `wrangler.bundle.jsonc` has no assets binding and is the config behind the upload package. Missing bindings, migrations, origin, or managed auth secret fail closed. Free-tier CPU and provider persistence still need live verification after an authorized deployment; local tests do not establish an SLA or guarantee 10 ms CPU for every dataset/device.
 
 Public `/signin` and hashed assets contain only application code. `/` redirects anonymous visitors to sign-in; every CRM API request requires a valid owner session. No customer records or secret values belong in the bundle/repository.
 
@@ -59,4 +60,4 @@ Legacy SQLite files, owner hashes, and sample data are **not automatically impor
 
 ## Source layout
 
-`src/worker.js`: native entry, origin/auth/static gates; `src/crm.js`: CRM API; `src/d1.js`: prepared queries; `src/pipeline.js`: atomic ordering; `src/auth/`: credential/session/CSRF/throttles; `src/client/`: React UI; `test/workers/`: actual workerd/D1 coverage; `dist/`: generated public assets; `.wrangler/dry-run/worker.js`: generated ES-module deployment bundle. Generated assets, databases, local secrets, and dependencies are ignored by Git.
+`src/worker.js`: native entry, origin/auth/static gates; `src/static-assets.js`: allowlist, MIME, and bundled or `ASSETS` fetch; `src/crm.js`: CRM API; `src/d1.js`: prepared queries; `src/pipeline.js`: atomic ordering; `src/auth/`: credential/session/CSRF/throttles; `src/client/`: React UI; `test/workers/`: actual workerd/D1 coverage; `dist/`: generated public assets; `deploy/cloudflare-upload/`: multipart upload package. Generated asset map, databases, local secrets, and dependencies are ignored by Git.

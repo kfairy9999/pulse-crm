@@ -46,19 +46,28 @@ export const securityHeaders = () => ({
   "Referrer-Policy": "no-referrer",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 });
-export function secureResponse(response, isApi = false) {
+function responsePathname(response, request) {
+  try {
+    if (request) return new URL(request.url).pathname;
+    if (response.url) return new URL(response.url).pathname;
+  } catch {
+    /* A malformed URL cannot select the hashed-asset cache policy. */
+  }
+  return "/";
+}
+export function secureResponse(response, isApi = false, request) {
   const result = new Response(response.body, response);
   for (const [k, v] of Object.entries(securityHeaders()))
     result.headers.set(k, v);
+  // Hashed /assets/ responses are immutable. Constructed module responses have
+  // an empty URL, so the request path selects the same policy as an asset fetch.
+  const hashedAsset =
+    !isApi &&
+    result.status < 400 &&
+    /assets\//i.test(responsePathname(result, request));
   result.headers.set(
     "Cache-Control",
-    isApi
-      ? "private, no-store"
-      : /assets\//i.test(
-            new URL(result.url || "https://assets.local/").pathname,
-          )
-        ? "public, max-age=31536000, immutable"
-        : "private, no-store",
+    hashedAsset ? "public, max-age=31536000, immutable" : "private, no-store",
   );
   if (isApi)
     result.headers.set("Content-Type", "application/json; charset=utf-8");
