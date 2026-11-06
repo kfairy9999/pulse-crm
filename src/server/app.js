@@ -12,6 +12,7 @@ import {
   getTask, getAppointment, requireExists, assertUniqueEmail, recordActivity, fullContactName,
 } from './db.js';
 import { seedSampleData } from './seed.js';
+import { createAuthRouter, getSession, requireAuth } from './auth.js';
 
 const DIST = resolve(dirname(fileURLToPath(import.meta.url)), '../../dist');
 const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
@@ -38,10 +39,11 @@ function normalizeContact(db, body, previous = null) {
   return result;
 }
 
-export function createApp({ db, staticDir = DIST } = {}) {
+export function createApp({ db, staticDir = DIST, auth = { enabled: false } } = {}) {
   if (!db) throw new Error('A database is required.');
   const app = express();
   app.disable('x-powered-by');
+  if (auth.enabled) app.set('trust proxy', auth.trustProxy ? 1 : false);
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -52,6 +54,13 @@ export function createApp({ db, staticDir = DIST } = {}) {
   app.use(express.json({ limit: '200kb', strict: true }));
 
   app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'Pulse CRM', version: 1 }));
+  if (!auth.enabled) {
+    app.get('/api/auth/session', (req, res) => res.json({ authenticated: true, user: null, setupRequired: false }));
+  }
+  if (auth.enabled) {
+    app.use('/api/auth', createAuthRouter({ db, ttlDays: auth.ttlDays, appOrigin: auth.appOrigin, production: auth.production, setupToken: auth.setupToken }));
+    app.use('/api', requireAuth(db));
+  }
   app.get('/api/metadata', (req, res) => res.json({
     name: 'Pulse CRM',
     pipelineStages: PIPELINE_STAGES,
@@ -348,7 +357,13 @@ export function createApp({ db, staticDir = DIST } = {}) {
   }));
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'API route not found.' }));
-
+  if (auth.enabled && staticDir && existsSync(staticDir)) {
+    app.get(['/', '/{*path}'], (req, res, next) => {
+      if (req.path !== '/' && !req.path.endsWith('.html')) return next();
+      if (!getSession(db, req)) return res.status(401).send('<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pulse CRM · Sign in required</title></head><body><main><h1>Sign in required</h1><p>This private CRM needs owner authentication. Enable JavaScript and open the app to sign in.</p><script>location.replace("/login")</script></main></body></html>');
+      next();
+    });
+  }
   if (staticDir && existsSync(staticDir)) {
     app.use(express.static(staticDir, { index: false }));
     app.get('/{*path}', (req, res) => res.sendFile(resolve(staticDir, 'index.html')));

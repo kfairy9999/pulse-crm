@@ -1,6 +1,7 @@
 import { id, now, transaction, recordActivity } from './db.js';
 
-export function seedSampleData(db, { force = false } = {}) {
+export function seedSampleData(db, { force = false, allowSample = true } = {}) {
+  if (!allowSample) throw new Error('Production cannot seed fictional sample data.');
   const state = db.prepare("SELECT value FROM app_metadata WHERE key = 'sample_seed'").get();
   if (state && !force) return false;
   transaction(db, () => {

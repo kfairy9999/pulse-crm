@@ -1,6 +1,6 @@
 # Pulse CRM
 
-A working, original CRM for keeping relationships, revenue, and next steps in one calm workspace. Pulse is a **local, single-user MVP**, not a hosted product or a copy of another CRM's interface.
+A working, original CRM for keeping relationships, revenue, and next steps in one calm workspace. Pulse is a **single-owner application** with a local mode and a guarded, single-instance hosted configuration. No multi-user/team features are implied.
 
 Built with React, Express, and Node's durable built-in SQLite driver. Contacts, notes, opportunities, tasks, and appointments persist across application restarts. No third-party database service, account credentials, cloud sync, or paid API is required.
 
@@ -16,13 +16,13 @@ Built with React, Express, and Node's durable built-in SQLite driver. Contacts, 
 
 ## Important boundaries
 
-**Pulse has no production authentication, authorization, tenant isolation, encrypted backup, rate limiting, CSRF protection, or audit-grade security controls.** It is designed for one user on a trusted, local computer. The default bind address is `127.0.0.1`. Do not expose it on a public or untrusted network, do not use it for sensitive production customer data, and do not treat it as a production deployment.
+**Local unauthenticated mode is localhost-only and must never be exposed to a network.** Production mode requires and enforces owner authentication, HTTPS-derived secure cookies, an exact application origin, a persistent-volume SQLite path, a provider-generated one-time setup secret, and a non-loopback bind address. This is a single-owner/single-replica MVP, not a multi-tenant SaaS. It has been integration-tested locally; deployment and resilience still require verification on the actual hosting provider before business use.
 
 - No email, SMS, WhatsApp, telephone, payment, or social-media integrations.
 - No sending or receiving of messages. `mailto:` and `tel:` links on a contact merely offer to open your own system application.
 - No external calendar read/write and no automatic meeting invitations or cancellations.
 - No background workflows, lead scoring, AI predictions, or pretend connected-state credentials.
-- No cloud sync, multi-user collaboration, or automatic backup.
+- No cloud sync, multi-user collaboration, or application-managed off-site backup. A provider volume is durable across ordinary restarts, not a recovery guarantee.
 - The six-stage chart groups open/won opportunity values by each record's last-updated month; it is an operational view, not a historical revenue report. The weighted forecast uses fixed stage weights (10% / 20% / 40% / 60%), not machine-learned probabilities.
 - The built-in sample people and companies are fictional. No Gmail, inbox, or personal contacts are imported.
 
@@ -56,17 +56,19 @@ npm run dev
 - The API and client reload when their source changes. For the running production preview, rerun `npm run build` after source changes.
 
 ### Configuration
+Local defaults: `HOST=127.0.0.1`, `PORT=3000`, `DATABASE_PATH=./data/pulse.db`, and `SEED_SAMPLE_DATA=true`. Set `SEED_SAMPLE_DATA=false` on first launch for an empty workspace.
+Optional local authentication settings:
+- `AUTH_ENABLED=true` enables a private local owner account; on a loopback origin only, omit `SETUP_TOKEN` to run owner setup without a bootstrap key.
+- `SESSION_TTL_DAYS=7` may be set to 1–30.
+- `TRUST_PROXY=true` trusts the first proxy hop for local HTTPS-proxy testing. Production cookie security is derived from the actual HTTPS request; never enable `COOKIE_SECURE` independently to simulate security on ordinary HTTP.
 
-Optional environment variables (copy `.env.example` to `.env`):
+Production refuses to start unless all of these are true: `REQUIRE_SECURE_DEPLOYMENT=true` (or the default with `NODE_ENV=production`), `AUTH_ENABLED=true`, `HOST=0.0.0.0`, `TRUST_PROXY=true`, `COOKIE_SECURE=true`, `SEED_SAMPLE_DATA=false`, an exact `APP_ORIGIN=https://…` without a path, and `DATABASE_PATH` under `/var/data/`. During initial owner setup, a provider-generated `SETUP_TOKEN` of at least 32 characters is also required; remove it after ownership is created so the server can restart normally while registration stays closed. `APP_ORIGIN` must match the service’s actual hostname; alter it before applying the Blueprint if the provider gives a different hostname.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `HOST` | `127.0.0.1` | Bind interface. Keep this on localhost without production authentication. |
-| `PORT` | `3000` | HTTP server port. Set `0` to choose a free port; the log reports the selected one. |
-| `DATABASE_PATH` | `./data/pulse.db` | Durable SQLite file path, resolved relative to the working directory. |
-| `SEED_SAMPLE_DATA` | `true` | Set to `false` to begin a new empty database. A seed marker prevents sample data from being recreated or resurrecting deleted sample records after startup. |
-
-Environment variables explicitly exported by the shell take precedence over `.env`. A sample `.env` is included; real `.env` files are ignored. No credentials are needed.
+### Owner authentication
+At the first hosted launch, the owner opens the displayed URL and enters their own email and unique 12–256-character password plus the provider-generated `SETUP_TOKEN`. Use the password manager’s generated password rather than choosing one in chat. Only one owner can be registered in a database; subsequent setup attempts return `403`. **Remove `SETUP_TOKEN` from the provider environment after verified setup.** Retain the owner password in a password manager: there is no account recovery or password-reset integration yet.
+Passwords use salted Node scrypt (N=16384, r=8, p=1, 64-byte output) and fixed-length Buffer comparison. Only SHA-256 digests of opaque 256-bit session tokens are stored. Sessions are revocable, expire server-side after seven days by default, and use `__Host-` cookies with `Path=/`, `HttpOnly`, `SameSite=Strict`, and `Secure` on HTTPS. CSRF tokens are held in separate `Secure`/`SameSite=Strict` cookies readable by this app; their SHA-256 digests are bound to the session and compare against a custom request header. Authentication also requires JSON and exact Origin/Referer matching. Login/setup requests are throttled per IP after eight failures in a 15-minute window.
+CRM JSON endpoints require a valid session in authenticated mode; HTML entry routes return `401` without one. `/api/auth/session`, `/api/auth/setup`, `/api/auth/login`, `/api/auth/logout`, and health-check requests are public routes without CRM data. **Static JavaScript and stylesheet assets are not secrets and are not treated as authenticated resources.** Do not put customer data or credentials into the client bundle or repository.
+This is deliberately one-owner software with a single active server-side session at any time. Logging in on a new device revokes earlier sessions. Database-stored session digests survive process restarts on the persistent disk and remain valid until expiration, logout, or the next login. Loss of the persistent volume loses owner/session and CRM data.
 
 ### Starting fresh or restoring sample data
 
@@ -99,6 +101,8 @@ Coverage includes:
 - Create, edit & value totals across all pipeline stages; ordered cross-stage moves and same-column repositioning.
 - On-disk SQLite restart persistence for all main record types; transaction rollback and seed idempotency/no-resurrection behavior.
 - Programmatic React server-rendered component checks for loaded dashboard metrics, form fields and defaults, contact prerequisites, and honest local-only messaging.
+
+- Owner auth/session/CSRF/origin/password-hash/expiry/revocation/rate-limit and fail-closed deployment configuration tests.
 
 ## Architecture
 
@@ -152,6 +156,13 @@ All endpoints are under `/api`; request bodies are JSON. Errors return `{ "error
 
 `PATCH` is a partial update. An opportunity stage change is `{ "stage": "Proposal" }`; an optional non-negative integer `position` sets its exact card order. Monetary API inputs and outputs are in USD units (`value`); SQLite stores integer cents to avoid binary floating-point money drift. A task toggle is `{ "completed": true }` or `{ "completed": false }`. Appointment `starts_at` accepts a valid ISO datetime and is normalized to UTC.
 
-## Deliberate MVP scope
+## Prepared Render deployment (not provisioned by this repository)
+`render.yaml` is a documented production configuration for one Node web service and one 1 GB persistent disk at `/var/data`, with no fictional sample data. The blueprint includes no password or committed secret; `SETUP_TOKEN` is generated by Render. **Creating these resources requires owner approval and a connected, authorized Render account.**
+As verified in the official docs/pricing on November 6, 2026: the `0.5c-512mb` compute plan is **$7/month** and a 1 GB disk is **$0.25/month** at $0.25/GB/month, totaling **$7.25/month before any prorations or applicable charges**. The free web tier is unsuitable because it cannot attach persistent disks; free Render PostgreSQL expires after 30 days and Pulse currently uses SQLite.
+Official sources: [pricing](https://render.com/pricing), [persistent disks](https://render.com/docs/disks), [Blueprint reference](https://render.com/docs/blueprint-spec), and [free-web limits](https://render.com/docs/free).
+Deployment requires the owner to approve Render’s account terms/costs and authorize the GitHub connection, apply this Blueprint from `feat/working-mvp`, verify the actual `APP_ORIGIN` equals the resulting public hostname (possibly `https://pulse-crm.onrender.com` or an alternate available name), then create their own owner account. Remove the generated setup secret from the environment after setup. Never commit the database, generated `SETUP_TOKEN`, or a password.
+The disk is attached to exactly one instance (the Blueprint enforces `numInstances: 1`). Files outside `/var/data` are ephemeral. A disk preserves data over ordinary restarts/deploys but does not protect against every failure; arrange a verified SQLite-consistent off-site backup before business-critical use. A disk increases deploy downtime by a few seconds (zero-downtime deploys unavailable). Snapshots are not a substitute for application-aware database backups. For a larger multi-user or high-availability service, migrate to managed PostgreSQL, centralized session storage/rate limiting, encrypted backups, and an external security review.
+Before declaring a hosted deployment working, verify live HTTPS, health checks, anonymous CRM/SPA denial, correct owner login/logout, invalid CSRF rejection, persistence across a real provider restart, and provider backup/recovery expectations. Local tests alone do not establish these hosted guarantees.
 
-Pulse prioritizes the CRM records and follow-up loop over feature-parity theater. Before any networked or multi-user release, it needs production identity and authorization, configurable per-user storage, secure session handling, CSRF/rate-limit defenses, resilient database migrations/backups, integration-specific consent and token storage, and appropriate privacy/security review. Those are **not implemented or claimed here**.
+## Deliberate MVP scope
+Pulse prioritizes the CRM records and follow-up loop over feature-parity theater. It supports a guarded single-owner deployment, but still lacks multi-user authorization/tenant isolation, password recovery, external identity/MFA, audit logs, application-managed off-site backups, HA, external integration consent/token handling, and a production security review.
