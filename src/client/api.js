@@ -7,9 +7,11 @@ export class ApiError extends Error {
 }
 
 export async function api(path, options = {}) {
+  const csrf = document.cookie.split('; ').find((cookie) => cookie.startsWith('__Host-pulse_csrf='))?.split('=').slice(1).join('=');
   const response = await fetch(`/api${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...options.headers },
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(csrf && !['login', 'setup'].some((name) => path.includes(name)) ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}), ...options.headers },
   });
   let payload;
   try { payload = await response.json(); } catch { payload = {}; }

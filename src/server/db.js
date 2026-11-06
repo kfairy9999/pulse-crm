@@ -108,6 +108,30 @@ function migrate(db) {
       COMMIT;
     `);
   }
+  if (current < 2) {
+    db.exec(`
+      BEGIN IMMEDIATE;
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        csrf_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_sessions_user ON sessions(user_id);
+      CREATE INDEX idx_sessions_expiry ON sessions(expires_at);
+      INSERT INTO schema_migrations VALUES (2, '${now()}');
+      COMMIT;
+    `);
+  }
 }
 
 export function transaction(db, callback) {
