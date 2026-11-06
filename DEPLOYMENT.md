@@ -1,26 +1,69 @@
-# Secure hosted-launch handoff
+# Cloudflare Free deployment handoff
 
-Prepared November 6, 2026 (Pacific). This is a plan, **not evidence of a running hosted service**.
+Prepared November 6, 2026 (PST). **Local adaptation and dry-run only. No resource was created, deployed, migrated remotely, or upgraded.** The Cloudflare connector is authenticated; deployment still needs the owner's explicit approval. Never enable a paid plan, usage-based add-on, or paid service to get past a limit.
 
-## Provider choice and approval needed
-Use one Render Hobby workspace: $0/month workspace fee + $7/month `0.5c-512mb` web compute + $0.25/month 1 GB persistent SSD = **$7.25/month**, before applicable prorations/overages. The owner must explicitly approve resource charges and any account terms. Official live sources: https://render.com/pricing and https://render.com/docs/disks.
-Free web compute cannot hold durable SQLite data and is not supported here; free Postgres expires after 30 days and does not support this SQLite codebase.
+## Artifacts
 
-## Supported access
-Use the Grok Bot Render connector: `https://cursor.com/grok-bot/link/v1/plugin/add?id=1295` (plugin 1295). It is not currently installed or authenticated. The owner must connect/sign in via Render OAuth. Do not read/copy tokens or cookies from the browser. No CLI authentication, signup, paid resource, or Blueprint apply has happened in this preparation.
+Run from `/workspace/pulse-crm`:
 
-## Apply / verify sequence
-1. Owner approves paid resources, connects the Render connector, and authorizes the private GitHub repository.
-2. Inspect the actual target hostname from the chosen Render service **before** applying. Update `APP_ORIGIN` if `pulse-crm.onrender.com` is unavailable or renamed; exact HTTPS origins are enforced for authentication state changes.
-3. Apply `render.yaml` from `feat/working-mvp` only after approval. It creates one instance (`numInstances: 1`), paid compute, persistent disk mounted at `/var/data`, and Render-generated 256-bit `SETUP_TOKEN` (no committed password/token). No preview environments or spin-down configuration is used.
-4. Owner opens the HTTPS URL and enters their own login email, vault/password-manager-generated unique password, and the generated provider `SETUP_TOKEN` in the first-run form. The agent does not select or see the password.
-5. Confirm owner login, then remove `SETUP_TOKEN` from the provider's environment; keep the owner password in the password manager. There is currently no password-recovery mechanism; one owner account and one active session are supported.
-6. Verify live reachable HTTPS and `/api/health` (public, no CRM data); anonymous `/`, `/login`, `/api/metadata`, `/api/contacts`, and `/api/dashboard` contain no CRM or customer content without a session. Static asset requests should contain only public application code, not customer content. Verify successful authenticated access, new login revokes an older session, logout revokes this session, mutation without/incorrect `X-CSRF-Token` is `403`, and Origin mismatch is `403`.
-7. Insert a test CRM record, perform a provider restart/redeploy, confirm the same record and auth owner survive on `/var/data/pulse.db`, then delete the test record. Do not alter/restart a customer's database without approval.
-8. Configure and verify an application-appropriate SQLite backup before business-critical use. A disk is durable over ordinary restarts, not a complete recovery strategy. Local integration coverage is not a hosted persistence test or penetration test.
+```bash
+npm ci
+npm test
+npm run test:smoke
+npm run check
+npm audit --audit-level=high
+git diff --check
+```
 
-## Local verification already completed
-Run `npm test`, `npm run build`, `npm audit --audit-level=high`, `git diff --check`; test output may be captured locally in the ignored `test-results.log`. A 28-test suite includes original working CRUD/browser-independent component checks, scrypt records, cookie/session lifecycle, CSRF, login throttling, and production configuration fail-closed guards. No service URL is being claimed without step 6.
+- `.wrangler/dry-run/worker.js`: bundled ES module; upload as `worker.js`, with `main_module: "worker.js"`. Do not upload the source map as a public static file.
+- `dist/`: all static assets, including `/index.html`, `/404.html`, and hashed `/assets/*`. Use Cloudflare's supported Workers Assets upload-session/manifest flow; bind as `ASSETS`. `run_worker_first: true` is essential; do not bypass the authentication router with SPA fallback.
+- `migrations/0001_initial.sql`: initial schema, no customer data or default owner. Apply once with D1 migration tracking. Never blindly rerun its CREATE statements on an existing database.
+- `wrangler.jsonc`: deployment template. Actual provider IDs/origin must replace placeholders. `wrangler.test.jsonc` is local-test-only and must not be deployed.
 
-## Hosting limits
-A persistent disk attaches to one service and one instance. Disabling horizontal scaling is necessary for this SQLite design. Ordinary deploys incur a brief downtime. Data outside `/var/data` is ephemeral. Render volume snapshots are not a replacement for database-aware backups. Backups, MFA, identity recovery, multi-user authorization/team isolation, HA, audit logs and external review remain future work.
+## Authorized connector sequence (not executed)
+
+1. Read the account's existing Workers plan, quota, existing Worker names, D1 databases, and workers.dev subdomain. If not on Free or if a collision/resource would be overwritten, stop for approval. Do not change the plan or overwrite an existing app.
+2. After explicit approval, create **one D1 database**, `pulse-crm`, on Free. Save its returned UUID into the `DB` binding/template. No KV, R2, Durable Object, Workflow, Queue, or paid add-on is required.
+3. Apply `0001_initial.sql` using the supported D1 migration/import mechanism. Confirm tables, schema version 3, revision 0, and zero contacts/users. Store the migration record; do not mutate schema from request handlers.
+4. Upload the assets using Cloudflare's assets API; keep its returned asset JWT/manifest out of public files. Upload the Worker bundle with:
+   - name `pulse-crm`, `main_module: worker.js`, compatibility date `2026-11-06`;
+   - D1 binding `{ type: "d1", name: "DB", id: <actual database UUID> }` (follow the connector's current schema);
+   - Assets binding `ASSETS` and metadata asset config `run_worker_first: true`, `not_found_handling: "404-page"`;
+   - plain-text vars `APP_ORIGIN=<exact actual https://…workers.dev origin>`, `SESSION_TTL_DAYS=7`, `AUTH_PEPPER_ID=pulse-owner-v1`;
+   - `workers_dev: true`, preview URLs disabled, no paid service bindings or schedules. Resolve the actual workers.dev subdomain before setting APP_ORIGIN.
+5. Through the provider's approved secret UI/API, have the **user/provider generate** independent cryptographically random 32-byte secrets:
+   - `AUTH_PEPPER`: canonical base64url of exactly 32 bytes (43 characters). Keep this stable: losing/changing it locks out the owner's password verifier. Do not paste it into chat or commit it.
+   - `SETUP_TOKEN`: a separate high-entropy bootstrap key, at least 32 random bytes (43-char base64url recommended). Never reuse a Cloudflare API token, owner password, or AUTH_PEPPER.
+     Do not substitute agent-chosen values or the public test fixtures. If the connector cannot safely generate/store secrets without exposing them, stop for the user's provider-side secret entry. A deployment with missing secrets intentionally returns 503.
+6. Expose only the final configured HTTPS origin; no alias/wildcard CORS. Owner visits `/signin`, enters their own email, password-manager-generated unique 12–256-character password, and provider setup key. The agent neither chooses nor sees the password.
+7. After verified owner login, remove only `SETUP_TOKEN` through the provider. Registration stays closed by the database marker. Preserve `AUTH_PEPPER` and its matching ID. No password-recovery integration exists.
+8. Perform the live acceptance checks below, only with approved test records/actions. Record the URL and deployment ID only after they exist.
+
+The connector must discover its current upload/migration schemas before executing. CLI login, token extraction, browser cookies, undocumented internal endpoints, or enabling paid plans are not fallbacks.
+
+## Live acceptance gate
+
+- HTTPS valid; `/api/health` returns 200 without customer content.
+- Anonymous `/` redirects to `/signin`; `/signin`/hashed assets contain only application code. Anonymous contacts/dashboard/metadata APIs are 401. Unknown routes, DB paths, environment files, and source files are not public.
+- Setup succeeds exactly once; login uses stored per-owner salt, rotates old sessions; logout and expiry revoke access. Removal of SETUP_TOKEN does not reopen setup.
+- Wrong Origin, absent/mismatched CSRF, malformed/oversized JSON, invalid relations/money/stages, and duplicate contact emails are rejected safely. Internal SQL/stack/secret values never reach clients.
+- Verify contacts, notes, all pipeline reorder/move/delete cases (including sole-card columns), tasks, appointments, dashboard/inbox. Concurrent pipeline writes either succeed consistently or return retryable 409 without partial data.
+- With explicit approval, create a test record, redeploy/restart, verify both session and record persistence, then remove only that test record. Local D1 eviction tests are not hosted persistence proof.
+- Inspect actual Worker CPU/error/limit metrics for login, setup, dashboard, and representative board sizes. **No production 10 ms CPU claim has been measured.** If limits fail, optimize or stop; do not upgrade.
+- Verify D1 export and recovery on an approved non-production copy before business-critical use. Retain provider secret recovery securely; exports contain sensitive CRM/auth data and must not go into the repository or chat.
+
+## Free-tier constraints
+
+Official docs checked November 6, 2026 (PST): Workers Free has 100,000 requests/day and 10 ms CPU/invocation. D1 Free has 5 million rows read/day, 100,000 rows written/day, 5 GB total storage and 10 databases, subject to per-database limits. Queries/indices, auth reads, revision snapshots, and activity writes count toward those quotas; all routes currently run Worker-first, including assets. Exhaustion means denial/errors or waiting for quota reset, **not permission to upgrade**. No SLA or unlimited growth is promised.
+
+- https://developers.cloudflare.com/workers/platform/limits/
+- https://developers.cloudflare.com/workers/platform/pricing/
+- https://developers.cloudflare.com/d1/platform/pricing/
+- https://developers.cloudflare.com/d1/platform/limits/
+- https://developers.cloudflare.com/d1/worker-api/d1-database/
+- https://developers.cloudflare.com/workers/static-assets/binding/
+- https://developers.cloudflare.com/d1/best-practices/import-export-data/
+
+PBKDF2 runs in the browser (600,000 SHA-256 iterations); Worker verification is HMAC with a managed secret. The derived credential is password-equivalent and must not be logged or retained. This depends on HTTPS/client-code integrity and is not a PAKE, MFA, or memory-hard server hash. A combined D1+pepper compromise still permits offline guessing. Free CPU and browser latency require real measurements; local tests only establish correctness in the tested runtime.
+
+D1 persistence is managed database storage, not application-managed off-site backup. Keep a separate approved export/recovery plan. The original Node SQLite owner/session database cannot simply be copied into D1: password protocols differ, and existing data migration/re-enrollment needs a separate approved plan.

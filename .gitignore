@@ -13,3 +13,9 @@ test-results/
 server.pid
 data/test-*.db
 data/test-*.db-*
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env.*
+!.env.example

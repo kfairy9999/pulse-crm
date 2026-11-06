@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pulse-crm",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-06",
+  "assets": {
+    "directory": "./dist/",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "404-page",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pulse-crm",
+      "database_id": "REPLACE_WITH_PROVIDER_DATABASE_ID",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "vars": {
+    "APP_ORIGIN": "REPLACE_WITH_EXACT_DEPLOYED_HTTPS_ORIGIN",
+    "SESSION_TTL_DAYS": "7",
+    "AUTH_PEPPER_ID": "pulse-owner-v1",
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true },
+    "traces": { "enabled": false },
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+}

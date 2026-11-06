@@ -1,36 +1,239 @@
-import { useEffect, useState } from 'react';
-import { LoaderCircle, ShieldCheck } from 'lucide-react';
-import { api, ApiError } from './api.js';
+import { useEffect, useState } from "react";
+import { LoaderCircle, ShieldCheck } from "lucide-react";
+import { api } from "./api.js";
+import { deriveCredential } from "../auth/password.js";
 
 export default function AuthGate({ children }) {
-  const [state, setState] = useState({ loading: true, user: null, setup: false });
-  const [fields, setFields] = useState({ email: '', password: '', confirm: '', setupToken: '' });
-  const [error, setError] = useState('');
+  const [state, setState] = useState({
+    loading: true,
+    user: null,
+    setup: false,
+  });
+  const [fields, setFields] = useState({
+    email: "",
+    password: "",
+    confirm: "",
+    setupToken: "",
+  });
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const load = async () => {
     try {
-      const result = await api('/auth/session');
-      setState({ loading: false, user: result.user, setup: result.setupRequired });
-    } catch (err) { setState({ loading: false, user: null, setup: false }); setError(err.message); }
+      const result = await api("/auth/session");
+      setState({
+        loading: false,
+        user: result.user,
+        setup: result.setupRequired,
+        passwordProtocol: result.passwordProtocol || "legacy-scrypt",
+      });
+    } catch (err) {
+      setState((current) => ({
+        ...current,
+        loading: false,
+        user: null,
+        setup: false,
+      }));
+      setError(err.message);
+    }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
   const submit = async (event) => {
-    event.preventDefault(); setError('');
-    if (state.setup && fields.password !== fields.confirm) return setError('Passwords do not match.');
+    event.preventDefault();
+    setError("");
+    if (state.setup && fields.password !== fields.confirm)
+      return setError("Passwords do not match.");
     setBusy(true);
     try {
-      const result = await api(`/auth/${state.setup ? 'setup' : 'login'}`, { method: 'POST', body: JSON.stringify({ email: fields.email, password: fields.password, setupToken: fields.setupToken || undefined }) });
-      window.dispatchEvent(new Event('pulse-session'));
-      setState({ loading: false, user: result.user, setup: false });
-    } catch (err) { setError(err.message); } finally { setBusy(false); }
+      const legacy = state.passwordProtocol === "legacy-scrypt";
+      const challenge =
+        state.setup || legacy
+          ? null
+          : await api(
+              `/auth/challenge?email=${encodeURIComponent(fields.email)}`,
+            );
+      const credential = legacy
+        ? { password: fields.password }
+        : await deriveCredential(fields.password, challenge?.salt);
+      setFields({ ...fields, password: "", confirm: "" });
+      const result = await api(`/auth/${state.setup ? "setup" : "login"}`, {
+        method: "POST",
+        body: JSON.stringify({
+          email: fields.email,
+          ...credential,
+          setupToken: fields.setupToken || undefined,
+        }),
+      });
+      window.history.replaceState(null, "", "/");
+      window.dispatchEvent(new Event("pulse-session"));
+      setState((current) => ({
+        ...current,
+        loading: false,
+        user: result.user,
+        setup: false,
+      }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setFields((current) => ({
+        ...current,
+        password: "",
+        confirm: "",
+        setupToken: "",
+      }));
+      setBusy(false);
+    }
   };
-  if (state.loading) return <main className="auth-screen"><LoaderCircle className="spin" /><p>Opening your secure workspace…</p></main>;
-  if (state.user) return children({ owner: state.user, onLogout: async () => { try { await api('/auth/logout', { method: 'POST' }); } catch { /* Expired sessions cannot access data. */ } setState({ loading: false, user: null, setup: false }); } });
-  return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="brand-symbol"><ShieldCheck size={22} /></span><span className="brand-name">pulse<span>.</span></span></div><span className="eyebrow">{state.setup ? 'One-time owner setup' : 'Your private workspace'}</span><h1>{state.setup ? 'Make this workspace yours.' : 'Welcome back.'}</h1><p>{state.setup ? 'Set your own email and a strong password. This is the only account registration.' : 'Sign in to manage your contacts, pipeline, tasks, and schedule.'}</p><form onSubmit={submit}>
-    {error && <div className="form-alert" role="alert">{error}</div>}
-    <div className="field"><label className="field-label" htmlFor="auth-email">Email address</label><input id="auth-email" type="email" name="username" autoComplete="username" required maxLength="254" autoFocus value={fields.email} onChange={(e) => setFields({ ...fields, email: e.target.value })} /></div>
-    <div className="field"><label className="field-label" htmlFor="auth-password">Password</label><input id="auth-password" type="password" name={state.setup ? 'new-password' : 'current-password'} autoComplete={state.setup ? 'new-password' : 'current-password'} required minLength={12} maxLength={256} value={fields.password} onChange={(e) => setFields({ ...fields, password: e.target.value })} /><span className="field-hint">At least 12 characters. Use a unique password from your password manager.</span></div>
-    {state.setup && <><div className="field"><label className="field-label" htmlFor="auth-confirm">Confirm password</label><input id="auth-confirm" type="password" autoComplete="new-password" required minLength={12} maxLength={256} value={fields.confirm} onChange={(e) => setFields({ ...fields, confirm: e.target.value })} /></div><div className="field"><label className="field-label" htmlFor="auth-setup-token">One-time setup key</label><input id="auth-setup-token" type="password" autoComplete="off" required maxLength={256} value={fields.setupToken} onChange={(e) => setFields({ ...fields, setupToken: e.target.value })} /><span className="field-hint">Copy this directly from the hosting provider’s generated SETUP_TOKEN variable. It is not your workspace password.</span></div></>}
-    <button className="button button-primary auth-submit" disabled={busy}>{busy ? <LoaderCircle size={16} className="spin" /> : state.setup ? 'Create my private workspace' : 'Sign in'} </button>
-  </form><div className="auth-privacy"><ShieldCheck size={15} /><span>Protected by encrypted HTTPS, secure sessions, and request verification.</span></div></section></main>;
+  if (state.loading)
+    return (
+      <main className="auth-screen">
+        <LoaderCircle className="spin" />
+        <p>Opening your secure workspace…</p>
+      </main>
+    );
+  if (state.user)
+    return children({
+      owner: state.user,
+      onLogout: async () => {
+        try {
+          await api("/auth/logout", { method: "POST" });
+        } catch {
+          /* Expired sessions cannot access data. */
+        }
+        setState((current) => ({
+          ...current,
+          loading: false,
+          user: null,
+          setup: false,
+        }));
+      },
+    });
+  return (
+    <main className="auth-screen">
+      <section className="auth-card">
+        <div className="auth-brand">
+          <span className="brand-symbol">
+            <ShieldCheck size={22} />
+          </span>
+          <span className="brand-name">
+            pulse<span>.</span>
+          </span>
+        </div>
+        <span className="eyebrow">
+          {state.setup ? "One-time owner setup" : "Your private workspace"}
+        </span>
+        <h1>{state.setup ? "Make this workspace yours." : "Welcome back."}</h1>
+        <p>
+          {state.setup
+            ? "Set your own email and a strong password. This is the only account registration."
+            : "Sign in to manage your contacts, pipeline, tasks, and schedule."}
+        </p>
+        <form onSubmit={submit}>
+          {error && (
+            <div className="form-alert" role="alert">
+              {error}
+            </div>
+          )}
+          <div className="field">
+            <label className="field-label" htmlFor="auth-email">
+              Email address
+            </label>
+            <input
+              id="auth-email"
+              type="email"
+              name="username"
+              autoComplete="username"
+              required
+              maxLength="254"
+              autoFocus
+              value={fields.email}
+              onChange={(e) => setFields({ ...fields, email: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="auth-password">
+              Password
+            </label>
+            <input
+              id="auth-password"
+              type="password"
+              name={state.setup ? "new-password" : "current-password"}
+              autoComplete={state.setup ? "new-password" : "current-password"}
+              required
+              minLength={12}
+              maxLength={256}
+              value={fields.password}
+              onChange={(e) =>
+                setFields({ ...fields, password: e.target.value })
+              }
+            />
+            <span className="field-hint">
+              At least 12 characters. Use a unique password from your password
+              manager.
+            </span>
+          </div>
+          {state.setup && (
+            <>
+              <div className="field">
+                <label className="field-label" htmlFor="auth-confirm">
+                  Confirm password
+                </label>
+                <input
+                  id="auth-confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={12}
+                  maxLength={256}
+                  value={fields.confirm}
+                  onChange={(e) =>
+                    setFields({ ...fields, confirm: e.target.value })
+                  }
+                />
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="auth-setup-token">
+                  One-time setup key
+                </label>
+                <input
+                  id="auth-setup-token"
+                  type="password"
+                  autoComplete="off"
+                  required
+                  maxLength={256}
+                  value={fields.setupToken}
+                  onChange={(e) =>
+                    setFields({ ...fields, setupToken: e.target.value })
+                  }
+                />
+                <span className="field-hint">
+                  Copy this directly from the hosting provider’s generated
+                  SETUP_TOKEN variable. It is not your workspace password.
+                </span>
+              </div>
+            </>
+          )}
+          <button className="button button-primary auth-submit" disabled={busy}>
+            {busy ? (
+              <>
+                <LoaderCircle size={16} className="spin" /> Processing securely…
+              </>
+            ) : state.setup ? (
+              "Create my private workspace"
+            ) : (
+              "Sign in"
+            )}{" "}
+          </button>
+        </form>
+        <div className="auth-privacy">
+          <ShieldCheck size={15} />
+          <span>
+            Protected by encrypted HTTPS, secure sessions, and request
+            verification.
+          </span>
+        </div>
+      </section>
+    </main>
+  );
 }
