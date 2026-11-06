@@ -1,0 +1,69 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createFixture } from './helpers.js';
+
+test('contacts support complete CRUD, normalized tags, notes, and filtering', async (t) => {
+  const { request, contact } = await createFixture(t);
+  const created = await contact({ first_name: ' Ada ', last_name: ' Lovelace ', email: 'ADA@Example.TEST', company: 'Analytical Engines', job_title: 'Mathematician', phone: '+1 415 555 0100', tags: ['VIP', 'vip', ' Referral '] });
+  assert.equal(created.name, 'Ada Lovelace');
+  assert.equal(created.email, 'ada@example.test');
+  assert.deepEqual(created.tags, ['vip', 'referral']);
+  assert.equal(created.note_count, 0);
+  const read = await request(`/contacts/${created.id}`, { expectedStatus: 200 });
+  assert.equal(read.payload.contact.company, 'Analytical Engines');
+  const updated = await request(`/contacts/${created.id}`, { method: 'PATCH', body: { company: 'Difference Studio', tags: 'priority, referral' }, expectedStatus: 200 });
+  assert.equal(updated.payload.contact.first_name, 'Ada');
+  assert.equal(updated.payload.contact.company, 'Difference Studio');
+  assert.equal(updated.payload.contact.email, 'ada@example.test');
+  assert.deepEqual(updated.payload.contact.tags, ['priority', 'referral']);
+  await request(`/contacts/${created.id}/notes`, { method: 'POST', expectedStatus: 201, body: { body: 'Saved local context, not a received message.' } });
+  assert.equal((await request('/contacts?q=Difference', { expectedStatus: 200 })).payload.total, 1);
+  assert.equal((await request('/contacts?tag=priority', { expectedStatus: 200 })).payload.total, 1);
+  assert.equal((await request('/contacts?q=Ada%20Lovelace', { expectedStatus: 200 })).payload.total, 1);
+  assert.equal((await request('/contacts?q=Analytical', { expectedStatus: 200 })).payload.total, 0);
+  assert.equal((await request('/contacts?tag=unknown', { expectedStatus: 200 })).payload.total, 0);
+  const detail = await request(`/contacts/${created.id}`, { expectedStatus: 200 });
+  assert.equal(detail.payload.notes.length, 1);
+  assert.equal(detail.payload.notes[0].body, 'Saved local context, not a received message.');
+  const inbox = await request('/inbox', { expectedStatus: 200 });
+  assert.equal(inbox.payload.mode, 'local-notes');
+  assert.equal(inbox.payload.notes.length, 1);
+  assert.deepEqual(inbox.payload.externalConnections, []);
+  await request(`/contacts/${created.id}`, { method: 'DELETE', expectedStatus: 200 });
+  assert.equal((await request('/contacts', { expectedStatus: 200 })).payload.total, 0);
+  assert.equal((await request('/inbox', { expectedStatus: 200 })).payload.notes.length, 0);
+});
+
+test('contact validation, duplicate emails, unknown records, and seed integrity are enforced', async (t) => {
+  const { request, contact } = await createFixture(t);
+  await request('/contacts', { method: 'POST', body: {}, expectedStatus: 400 });
+  await request('/contacts', { method: 'POST', body: { first_name: 'Invalid', email: 'not-an-email' }, expectedStatus: 400 });
+  await request('/contacts', { method: 'POST', body: { first_name: 'Invalid', phone: 'bad-phone' }, expectedStatus: 400 });
+  await request('/contacts', { method: 'POST', body: { first_name: 'Invalid', tags: ['ok', 5] }, expectedStatus: 400 });
+  const first = await contact({ email: 'unique@example.test' });
+  await request('/contacts', { method: 'POST', body: { first_name: 'Duplicate', email: 'UNIQUE@example.test' }, expectedStatus: 409 });
+  const second = await contact();
+  await request(`/contacts/${second.id}`, { method: 'PATCH', body: { email: first.email }, expectedStatus: 409 });
+  assert.equal((await request(`/contacts/${second.id}`, { expectedStatus: 200 })).payload.contact.email, second.email);
+  await request('/contacts/not-a-contact', { expectedStatus: 404 });
+  await request(`/contacts/${first.id}/notes`, { method: 'POST', body: { body: '   ' }, expectedStatus: 400 });
+  await request('/contacts', { method: 'POST', body: '{ broken', expectedStatus: 400 });
+  assert.equal((await request('/contacts', { expectedStatus: 200 })).payload.total, 2);
+});
+
+test('deleting contacts protects deals and explicitly detaches tasks/appointments', async (t) => {
+  const { request, contact } = await createFixture(t);
+  const linked = await contact({ first_name: 'Linked' });
+  await request('/opportunities', { method: 'POST', body: { title: 'Linked opportunity', contact_id: linked.id, value: 50 }, expectedStatus: 201 });
+  await request(`/contacts/${linked.id}`, { method: 'DELETE', expectedStatus: 409 });
+  assert.equal((await request(`/contacts/${linked.id}`, { expectedStatus: 200 })).payload.contact.id, linked.id);
+  const detached = await contact({ first_name: 'Detached' });
+  const task = (await request('/tasks', { method: 'POST', body: { title: 'Linked task', contact_id: detached.id, due_date: '2026-11-10' }, expectedStatus: 201 })).payload.task;
+  const meeting = (await request('/appointments', { method: 'POST', body: { title: 'Linked meeting', contact_id: detached.id, starts_at: '2026-11-10T17:00:00Z', duration_minutes: 30 }, expectedStatus: 201 })).payload.appointment;
+  await request(`/contacts/${detached.id}`, { method: 'DELETE', expectedStatus: 200 });
+  assert.equal((await request(`/tasks/${task.id}`, { expectedStatus: 200 })).payload.task.contact_id, null);
+  const tasks = await request('/tasks', { expectedStatus: 200 });
+  assert.equal(tasks.payload.tasks[0].contact_id, null);
+  const appointments = await request('/appointments', { expectedStatus: 200 });
+  assert.equal(appointments.payload.appointments[0].contact_id, null);
+});

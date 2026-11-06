@@ -1,0 +1,29 @@
+{
+  "name": "pulse-crm",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An original, local-first CRM with durable contacts, pipeline, tasks, and appointments.",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n API,WEB \"node --watch src/server/index.js\" \"vite --host 127.0.0.1\"",
+    "build": "vite build",
+    "start": "node src/server/index.js",
+    "test": "node --import ./test/react-loader.js --test --test-concurrency=1 test/*.test.js test/*.test.jsx",
+    "test:watch": "node --import ./test/react-loader.js --watch --test --test-concurrency=1 test/*.test.js test/*.test.jsx",
+    "reset:sample": "node scripts/reset-sample-data.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "vite": "^6.1.0"
+  }
+}
