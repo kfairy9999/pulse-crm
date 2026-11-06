@@ -1,0 +1,7 @@
+# LOCAL-ONLY: copy to ignored .dev.vars and replace BOTH placeholders with
+# independent cryptographically random 32-byte base64url values. Never reuse
+# production secrets. Example local generation: node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+AUTH_PEPPER=REPLACE_WITH_LOCAL_RANDOM_32_BYTE_BASE64URL
+SETUP_TOKEN=REPLACE_WITH_SEPARATE_LOCAL_RANDOM_32_BYTE_BASE64URL
+AUTH_PEPPER_ID=local-development-v1
+APP_ORIGIN=https://127.0.0.1:8787
