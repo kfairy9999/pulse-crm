@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pulse-crm",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-06",
+  "upload_source_maps": false,
+  "workers_dev": true,
+  "preview_urls": false,
+  // No assets binding: the React shell and hashed files are embedded in the
+  // Worker module so a script upload does not need the assets-session JWT.
+  // wrangler.jsonc keeps the ASSETS binding for local static-assets mode.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pulse-crm",
+      "database_id": "7b391a6a-415e-4ad9-ae5d-eeaff7b3ded3",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "vars": {
+    "APP_ORIGIN": "https://pulse-crm.kfairley9999.workers.dev",
+    "SESSION_TTL_DAYS": "7",
+    "AUTH_PEPPER_ID": "pulse-owner-v1",
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true },
+    "traces": { "enabled": false },
+  },
+}

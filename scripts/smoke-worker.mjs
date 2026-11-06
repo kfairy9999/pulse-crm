@@ -7,6 +7,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
 import { deriveCredential } from "../src/auth/password.js";
 const origin = "http://127.0.0.1:8799";
+const config = process.env.PULSE_SMOKE_CONFIG || "wrangler.test.jsonc";
+const database = process.env.PULSE_SMOKE_DATABASE || "local-test-only";
+const bundled = process.env.PULSE_SMOKE_BUNDLED === "1";
 const setupToken = "LOCAL_SMOKE_TEST_ONLY_NOT_A_PRODUCTION_SECRET";
 const storage = mkdtempSync(path.join(tmpdir(), "pulse-crm-smoke-"));
 const migrated = spawnSync(
@@ -16,10 +19,10 @@ const migrated = spawnSync(
     "d1",
     "migrations",
     "apply",
-    "local-test-only",
+    database,
     "--local",
     "--config",
-    "wrangler.test.jsonc",
+    config,
     "--persist-to",
     storage,
   ],
@@ -36,7 +39,7 @@ const child = spawn(
     "dev",
     "--local",
     "--config",
-    "wrangler.test.jsonc",
+    config,
     "--ip",
     "127.0.0.1",
     "--port",
@@ -81,7 +84,31 @@ try {
   assert.equal(root.status, 302);
   const signin = await fetch(`${origin}/signin`);
   assert.equal(signin.status, 200);
-  assert.match(await signin.text(), /id="root"/);
+  const shell = await signin.text();
+  assert.match(shell, /id="root"/);
+  if (bundled) {
+    const script = shell.match(/src="(\/assets\/[^"]+\.js)"/)[1];
+    const style = shell.match(/href="(\/assets\/[^"]+\.css)"/)?.[1];
+    for (const [asset, mime] of [
+      [script, /^text\/javascript/],
+      [style, /^text\/css/],
+    ].filter(([asset]) => asset)) {
+      const response = await fetch(origin + asset);
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get("content-type") || "", mime);
+      assert.equal(
+        response.headers.get("cache-control"),
+        "public, max-age=31536000, immutable",
+      );
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+      assert.ok((await response.arrayBuffer()).byteLength > 0);
+    }
+    assert.notEqual((await fetch(`${origin}/404.html`)).status, 200);
+    assert.notEqual(
+      (await fetch(`${origin}/assets/not-a-real-file.js`)).status,
+      200,
+    );
+  }
   const setup = await fetch(`${origin}/api/auth/setup`, {
     method: "POST",
     headers: {

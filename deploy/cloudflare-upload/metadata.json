@@ -1,0 +1,49 @@
+{
+  "main_module": "worker.js",
+  "compatibility_date": "2026-11-06",
+  "compatibility_flags": [],
+  "usage_model": "standard",
+  "logpush": false,
+  "keep_bindings": [
+    "secret_text",
+    "secret_key"
+  ],
+  "bindings": [
+    {
+      "type": "d1",
+      "name": "DB",
+      "database_id": "7b391a6a-415e-4ad9-ae5d-eeaff7b3ded3"
+    },
+    {
+      "type": "plain_text",
+      "name": "APP_ORIGIN",
+      "text": "https://pulse-crm.kfairley9999.workers.dev"
+    },
+    {
+      "type": "plain_text",
+      "name": "SESSION_TTL_DAYS",
+      "text": "7"
+    },
+    {
+      "type": "plain_text",
+      "name": "AUTH_PEPPER_ID",
+      "text": "pulse-owner-v1"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": false,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  }
+}
