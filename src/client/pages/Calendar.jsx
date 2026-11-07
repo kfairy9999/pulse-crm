@@ -6,8 +6,12 @@ import { Avatar, Button, ConfirmDialog, EmptyState, ErrorState, IconButton, Load
 
 const dayKey = (date) => localDateKey(date);
 
-export default function Calendar({ openForm, notify, revision, navigate }) {
-  const { data, loading, error, reload } = useResource('/appointments');
+export default function Calendar({ openForm, notify, revision, navigate, initialData = null }) {
+  const resource = useResource('/appointments');
+  const data = initialData || resource.data;
+  const loading = initialData ? false : resource.loading;
+  const error = initialData ? null : resource.error;
+  const reload = resource.reload;
   const [cursor, setCursor] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(dayKey(new Date()));
   const [view, setView] = useState('month');
