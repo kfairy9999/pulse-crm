@@ -51,10 +51,16 @@ function optionalPhone(value) {
 }
 __name(optionalPhone, "optionalPhone");
 function cleanTags(value) {
-  if (value === void 0 || value === null) return [];
+  if (value === void 0 || value === null || value === "") return [];
   if (typeof value === "string") value = value.split(",");
-  if (!Array.isArray(value) || value.length > 12) fail("Tags must be a list of 12 or fewer.");
-  return [...new Set(value.map((tag) => requiredText(tag, "Tag", 32).toLowerCase()))];
+  if (!Array.isArray(value)) fail("Tags must be a list of 12 or fewer.");
+  const tags = [];
+  for (const tag of value) {
+    if (typeof tag === "string" && !tag.trim()) continue;
+    tags.push(requiredText(tag, "Tag", 32));
+  }
+  if (tags.length > 12) fail("Tags must be a list of 12 or fewer.");
+  return [...new Set(tags.map((tag) => tag.toLowerCase()))];
 }
 __name(cleanTags, "cleanTags");
 function moneyToCents(value, required = false) {
