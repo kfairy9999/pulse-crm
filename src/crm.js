@@ -38,6 +38,24 @@ import {
 } from "./d1.js";
 import { json } from "./auth/http.js";
 import {
+  addRule,
+  addView,
+  applyStageRules,
+  assertBackupPreview,
+  buildExport,
+  buildReport,
+  commitImport,
+  contactsToCsv,
+  existingEmails,
+  loadWorkspace,
+  previewImport,
+  recurrenceChoice,
+  rememberRecurrence,
+  removeRule,
+  removeView,
+  spawnNextRecurrence,
+} from "./sales.js";
+import {
   readBoard,
   createOpportunityStatement,
   updateOpportunityStatements,
@@ -221,6 +239,30 @@ function dashboardResult(
 }
 export async function handleCrm(request, env, { method, path, body, url }) {
   const db = env.DB;
+  if (method === "GET" && path === "/api/export") return json(await buildExport(db));
+  if (method === "GET" && path === "/api/contacts.csv") {
+    const contacts = await all(db, `${contactSelect} ORDER BY LOWER(c.first_name) LIMIT 2000`);
+    return json({ filename: "pulse-contacts.csv", csv: contactsToCsv(contacts.map(mapContact)) });
+  }
+  if (method === "POST" && path === "/api/import/preview")
+    return json(previewImport(body?.csv, await existingEmails(db), body?.mapping));
+  if (method === "POST" && path === "/api/import/contacts")
+    return json(await commitImport(db, body?.csv, body?.mapping), 201);
+  if (method === "POST" && path === "/api/export/preview")
+    return json(assertBackupPreview(body?.backup || body));
+  if (method === "GET" && path === "/api/reports") return json(await buildReport(db));
+  if (method === "GET" && path === "/api/views") return json({ views: (await loadWorkspace(db)).views });
+  if (method === "POST" && path === "/api/views") return json({ view: await addView(db, body) }, 201);
+  if (method === "DELETE" && path.startsWith("/api/views/")) {
+    await removeView(db, decodeURIComponent(path.slice("/api/views/".length)));
+    return json({ deleted: true });
+  }
+  if (method === "GET" && path === "/api/stage-rules") return json({ rules: (await loadWorkspace(db)).rules });
+  if (method === "POST" && path === "/api/stage-rules") return json({ rule: await addRule(db, body) }, 201);
+  if (method === "DELETE" && path.startsWith("/api/stage-rules/")) {
+    await removeRule(db, decodeURIComponent(path.slice("/api/stage-rules/".length)));
+    return json({ deleted: true });
+  }
   if (method === "GET" && path === "/api/metadata")
     return json({
       name: "Pulse CRM",
@@ -305,7 +347,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
     const cid = decodeURIComponent(match[1]);
     if (method === "GET") {
       const contact = await getContact(db, cid),
-        [notes, opportunities, tasks, appointments] = await concurrent(db, [
+        [notes, opportunities, tasks, appointments, history] = await concurrent(db, [
           statement(
             db,
             "SELECT * FROM contact_notes WHERE contact_id=? ORDER BY created_at DESC",
@@ -326,6 +368,11 @@ export async function handleCrm(request, env, { method, path, body, url }) {
             "SELECT * FROM appointments WHERE contact_id=? ORDER BY starts_at DESC",
             contact.id,
           ),
+          statement(
+            db,
+            "SELECT id,kind,summary,created_at FROM activities WHERE contact_id=? ORDER BY created_at DESC LIMIT 50",
+            contact.id,
+          ),
         ]);
       return json({
         contact,
@@ -333,6 +380,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         opportunities: opportunities.map(mapOpportunity),
         tasks,
         appointments,
+        history,
       });
     }
     if (method === "PATCH") {
@@ -490,6 +538,8 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         ),
         rows.revision,
       );
+      if (previous.stage !== input.stage)
+        await applyStageRules(db, { ...input, id: oid });
       return json({ opportunity: await getOpportunity(db, oid) });
     }
     if (method === "DELETE") {
@@ -543,6 +593,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
       "tasks",
       activity("task", `Created task ${fields.title}`, fields.contact_id),
     );
+    if (body?.recurrence) await rememberRecurrence(db, fields.id, recurrenceChoice(body.recurrence), fields.due_date);
     return json({ task: await getTask(db, fields.id) }, 201);
   }
   match = path.match(/^\/api\/tasks\/([^/]+)$/);
@@ -565,7 +616,9 @@ export async function handleCrm(request, env, { method, path, body, url }) {
           input.contact_id,
         ),
       );
-      return json({ task: await getTask(db, tid) });
+      if (body?.recurrence) await rememberRecurrence(db, tid, recurrenceChoice(body.recurrence), input.due_date);
+      const followUp = await spawnNextRecurrence(db, previous, input);
+      return json({ task: await getTask(db, tid), followUp });
     }
     if (method === "DELETE") {
       const record = await getTask(db, tid);
