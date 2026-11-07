@@ -7,8 +7,17 @@ import { OPEN_STAGES, PIPELINE_STAGES, STAGE_WEIGHTS } from '../../shared.js';
 
 const stageTone = { 'New Lead': 'blue', Contacted: 'purple', Booked: 'teal', Proposal: 'orange', Won: 'green', Lost: 'gray' };
 
+export function stageRows(stages, stage) {
+  const rows = stages?.[stage];
+  return Array.isArray(rows) ? rows : [];
+}
+
+export function openPipelineValue(stages) {
+  return OPEN_STAGES.reduce((total, stage) => total + stageRows(stages, stage).reduce((sum, deal) => sum + (Number(deal?.value) || 0), 0), 0);
+}
+
 export function weightedOpenValue(stages) {
-  return OPEN_STAGES.reduce((total, stage) => total + (stages[stage] || []).reduce((sum, deal) => sum + deal.value * STAGE_WEIGHTS[stage], 0), 0);
+  return OPEN_STAGES.reduce((total, stage) => total + stageRows(stages, stage).reduce((sum, deal) => sum + (Number(deal?.value) || 0) * STAGE_WEIGHTS[stage], 0), 0);
 }
 
 export default function Pipeline({ openForm, notify, revision, contacts, initialData = null }) {
@@ -33,10 +42,10 @@ export default function Pipeline({ openForm, notify, revision, contacts, initial
   return <div className="page pipeline-page">
     <div className="page-heading"><div><span className="eyebrow">Turn conversations into momentum</span><h1>Pipeline<span className="count-badge">{data?.total ?? '—'}</span></h1><p>Every opportunity has a next step.</p></div><Button variant="primary" icon={Plus} onClick={() => openForm('opportunity', () => reload(true))}>New opportunity</Button></div>
     <div className="pipeline-search"><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter this pipeline…" aria-label="Filter opportunities" /></div>
-    {loading ? <LoadingState label="Laying out your pipeline" /> : error ? <ErrorState error={error} retry={reload} /> : <>
-      <div className="pipeline-summary"><div><span className="summary-icon blue"><CircleDollarSign size={18} /></span><span><small>Open value</small><strong>{money(OPEN_STAGES.flatMap((stage) => data.stages[stage]).reduce((total, deal) => total + deal.value, 0))}</strong></span></div><div><span className="summary-icon purple"><TrendingUp size={18} /></span><span><small>Weighted forecast</small><strong>{money(weightedOpenValue(data.stages))}</strong></span></div><div><span className="summary-icon green"><Trophy size={18} /></span><span><small>Won</small><strong>{money(data.stages.Won.reduce((total, deal) => total + deal.value, 0))}</strong></span></div><div className="pipeline-instruction"><GripVertical size={17} /><span>Drag cards between stages, or use the stage menu on any card.</span></div></div>
+    {loading ? <LoadingState label="Laying out your pipeline" /> : error || !data?.stages ? <ErrorState error={error || { message: 'The pipeline response was incomplete.' }} retry={reload} /> : <>
+      <div className="pipeline-summary"><div><span className="summary-icon blue"><CircleDollarSign size={18} /></span><span><small>Open value</small><strong>{money(openPipelineValue(data.stages))}</strong></span></div><div><span className="summary-icon purple"><TrendingUp size={18} /></span><span><small>Weighted forecast</small><strong>{money(weightedOpenValue(data.stages))}</strong></span></div><div><span className="summary-icon green"><Trophy size={18} /></span><span><small>Won</small><strong>{money(stageRows(data.stages, 'Won').reduce((total, deal) => total + (Number(deal?.value) || 0), 0))}</strong></span></div><div className="pipeline-instruction"><GripVertical size={17} /><span>Drag cards between stages, or use the stage menu on any card.</span></div></div>
       <div className="pipeline-board" aria-label="Opportunity pipeline">{PIPELINE_STAGES.map((stage) => {
-        const deals = data.stages[stage].filter((deal) => `${deal.title} ${deal.contact_name} ${deal.company || ''}`.toLowerCase().includes(query.toLowerCase()));
+        const deals = stageRows(data.stages, stage).filter((deal) => `${deal?.title || ''} ${deal?.contact_name || ''} ${deal?.company || ''}`.toLowerCase().includes(query.toLowerCase()));
         return <section className={`pipeline-column stage-${stageTone[stage]} ${dragOver === stage ? 'drag-over' : ''}`} key={stage} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDragOver(stage); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDragOver(null); }} onDrop={(event) => { event.preventDefault(); const id = event.dataTransfer.getData('text/plain') || dragId; if (id) move(id, stage); }}>
           <div className="pipeline-column-header"><div><span className={`stage-dot ${stageTone[stage]}`} /><h2>{stage}</h2><span className="stage-count">{deals.length}</span></div><span className="stage-total">{money(deals.reduce((total, deal) => total + deal.value, 0), true)}</span></div>
           <div className="stage-progress"><span style={{ width: `${Math.min(100, stage === 'Won' ? 100 : (STAGE_WEIGHTS[stage] || .03) * 100)}%` }} /></div>

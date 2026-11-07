@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AlertCircle, ArrowRight, CalendarDays, CheckSquare, DollarSign, UsersRound } from 'lucide-react';
-import { api, toDateTimeLocal } from '../api.js';
+import { api, fromDateTimeLocal, toDateTimeLocal } from '../api.js';
 import { Button, FormField, Modal, Select } from './UI.jsx';
 import { PIPELINE_STAGES, TASK_PRIORITIES } from '../../shared.js';
 
@@ -8,6 +8,7 @@ async function submitForm({ event, record, endpoint, setBusy, setError, onSaved 
   event.preventDefault();
   setBusy(true); setError(null);
   const values = Object.fromEntries(new FormData(event.currentTarget));
+  if (typeof values.starts_at === 'string') values.starts_at = fromDateTimeLocal(values.starts_at);
   try {
     await api(endpoint, { method: record ? 'PATCH' : 'POST', body: JSON.stringify(values) });
     onSaved();

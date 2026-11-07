@@ -6,7 +6,7 @@ import { DashboardView } from '../src/client/pages/Dashboard.jsx';
 import Inbox from '../src/client/pages/Inbox.jsx';
 import { ContactForm, OpportunityForm, TaskForm, AppointmentForm } from '../src/client/components/Forms.jsx';
 import { Workflows } from '../src/client/App.jsx';
-import Pipeline, { weightedOpenValue } from '../src/client/pages/Pipeline.jsx';
+import Pipeline, { openPipelineValue, weightedOpenValue } from '../src/client/pages/Pipeline.jsx';
 import Tasks from '../src/client/pages/Tasks.jsx';
 import Calendar from '../src/client/pages/Calendar.jsx';
 
@@ -76,6 +76,12 @@ test('the first deal renders on the pipeline and stays visible after a stage cha
   assert.match(moved, /selected="">Contacted</);
   assert.equal(weightedOpenValue(stagesFor('Contacted')), 0.2);
   assert.doesNotMatch(moved, /selected="">New Lead</);
+  const partial = { 'New Lead': stagesFor('New Lead')['New Lead'] };
+  assert.equal(openPipelineValue(partial), 1);
+  const missingColumns = renderToStaticMarkup(<Pipeline {...props} initialData={{ stages: partial, total: 1 }} />);
+  assert.match(missingColumns, /CRM verification — temporary deal/);
+  assert.match(missingColumns, /New Lead/);
+  assert.match(missingColumns, /Has notes/);
 });
 
 test('tasks and schedule screens render saved records', () => {
