@@ -4,11 +4,15 @@ import { api, localDateKey, plainDate } from '../api.js';
 import { useResource } from '../hooks.js';
 import { Avatar, Button, ConfirmDialog, EmptyState, ErrorState, IconButton, LoadingState, Tag, TaskCheckbox } from '../components/UI.jsx';
 
-export default function Tasks({ openForm, notify, revision }) {
+export default function Tasks({ openForm, notify, revision, initialData = null }) {
   const [filter, setFilter] = useState('Open');
   const [busy, setBusy] = useState(null);
   const [deleting, setDeleting] = useState(null);
-  const { data, loading, error, reload } = useResource('/tasks');
+  const resource = useResource('/tasks');
+  const data = initialData || resource.data;
+  const loading = initialData ? false : resource.loading;
+  const error = initialData ? null : resource.error;
+  const reload = resource.reload;
   const toggleTask = async (task) => {
     setBusy(task.id);
     try { await api(`/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ completed: task.status !== 'Completed' }) }); await reload(true); notify(task.status === 'Completed' ? 'Task reopened.' : 'Task complete — nice work.'); }

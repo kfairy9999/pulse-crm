@@ -6,6 +6,9 @@ import { DashboardView } from '../src/client/pages/Dashboard.jsx';
 import Inbox from '../src/client/pages/Inbox.jsx';
 import { ContactForm, OpportunityForm, TaskForm, AppointmentForm } from '../src/client/components/Forms.jsx';
 import { Workflows } from '../src/client/App.jsx';
+import Pipeline, { weightedOpenValue } from '../src/client/pages/Pipeline.jsx';
+import Tasks from '../src/client/pages/Tasks.jsx';
+import Calendar from '../src/client/pages/Calendar.jsx';
 
 const contacts = [{ id: 'c1', name: 'Ava Martinez', first_name: 'Ava', last_name: 'Martinez', company: 'Northstar', tags: ['sample'] }];
 
@@ -56,6 +59,32 @@ test('workflows and notes reader never pretend external integrations are active'
   const inbox = renderToStaticMarkup(<Inbox openForm={() => {}} notify={() => {}} />);
   assert.match(inbox, /Opening local notes/);
   delete globalThis.fetch;
+});
+
+test('the first deal renders on the pipeline and stays visible after a stage change', () => {
+  const deal = { id: 'd1', title: 'CRM verification — temporary deal', contact_name: 'CRM verification — temporary', company: 'Verification Co', value: 1, stage: 'New Lead', notes: 'Temporary acceptance-test deal, not a real lead', expected_close_date: null, position: 0 };
+  const stagesFor = (stage) => Object.fromEntries(['New Lead', 'Contacted', 'Booked', 'Proposal', 'Won', 'Lost'].map((name) => [name, name === stage ? [{ ...deal, stage }] : []]));
+  const props = { openForm() {}, notify() {}, contacts: [] };
+  assert.equal(weightedOpenValue(stagesFor('New Lead')), 0.1);
+  const first = renderToStaticMarkup(<Pipeline {...props} initialData={{ stages: stagesFor('New Lead'), total: 1 }} />);
+  assert.match(first, /CRM verification — temporary deal/);
+  assert.match(first, /\$1/);
+  assert.match(first, /Opportunity pipeline/);
+  assert.match(first, /selected="">New Lead</);
+  const moved = renderToStaticMarkup(<Pipeline {...props} initialData={{ stages: stagesFor('Contacted'), total: 1 }} />);
+  assert.match(moved, /CRM verification — temporary deal/);
+  assert.match(moved, /selected="">Contacted</);
+  assert.equal(weightedOpenValue(stagesFor('Contacted')), 0.2);
+  assert.doesNotMatch(moved, /selected="">New Lead</);
+});
+
+test('tasks and schedule screens render saved records', () => {
+  const tasks = renderToStaticMarkup(<Tasks openForm={() => {}} notify={() => {}} initialData={{ today: '2026-11-07', counts: { open: 1, highPriority: 1, completed: 0 }, tasks: [{ id: 't1', title: 'CRM verification — temporary task', status: 'Open', priority: 'High', due_date: '2026-12-01', contact_name: 'CRM verification — temporary', notes: 'Temporary acceptance-test task' }] }} />);
+  assert.match(tasks, /CRM verification — temporary task/);
+  assert.match(tasks, /High/);
+  const schedule = renderToStaticMarkup(<Calendar openForm={() => {}} notify={() => {}} navigate={() => {}} initialData={{ appointments: [{ id: 'a1', title: 'CRM verification — temporary appointment', starts_at: '2026-11-15T15:00:00.000Z', duration_minutes: 30, contact_name: 'CRM verification — temporary', location: 'Local only', notes: 'Temporary acceptance-test appointment' }] }} />);
+  assert.match(schedule, /CRM verification — temporary appointment/);
+  assert.match(schedule, /Local schedule only/);
 });
 
 test('no contacts creates a genuine prerequisite for opportunities', () => {

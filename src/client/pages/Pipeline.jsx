@@ -7,8 +7,16 @@ import { OPEN_STAGES, PIPELINE_STAGES, STAGE_WEIGHTS } from '../../shared.js';
 
 const stageTone = { 'New Lead': 'blue', Contacted: 'purple', Booked: 'teal', Proposal: 'orange', Won: 'green', Lost: 'gray' };
 
-export default function Pipeline({ openForm, notify, revision, contacts }) {
-  const { data, loading, error, reload } = useResource('/opportunities');
+export function weightedOpenValue(stages) {
+  return OPEN_STAGES.reduce((total, stage) => total + (stages[stage] || []).reduce((sum, deal) => sum + deal.value * STAGE_WEIGHTS[stage], 0), 0);
+}
+
+export default function Pipeline({ openForm, notify, revision, contacts, initialData = null }) {
+  const resource = useResource('/opportunities');
+  const data = initialData || resource.data;
+  const loading = initialData ? false : resource.loading;
+  const error = initialData ? null : resource.error;
+  const reload = resource.reload;
   const [query, setQuery] = useState('');
   const [dragId, setDragId] = useState(null);
   const [dragOver, setDragOver] = useState(null);
@@ -26,7 +34,7 @@ export default function Pipeline({ openForm, notify, revision, contacts }) {
     <div className="page-heading"><div><span className="eyebrow">Turn conversations into momentum</span><h1>Pipeline<span className="count-badge">{data?.total ?? '—'}</span></h1><p>Every opportunity has a next step.</p></div><Button variant="primary" icon={Plus} onClick={() => openForm('opportunity', () => reload(true))}>New opportunity</Button></div>
     <div className="pipeline-search"><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter this pipeline…" aria-label="Filter opportunities" /></div>
     {loading ? <LoadingState label="Laying out your pipeline" /> : error ? <ErrorState error={error} retry={reload} /> : <>
-      <div className="pipeline-summary"><div><span className="summary-icon blue"><CircleDollarSign size={18} /></span><span><small>Open value</small><strong>{money(OPEN_STAGES.flatMap((stage) => data.stages[stage]).reduce((total, deal) => total + deal.value, 0))}</strong></span></div><div><span className="summary-icon purple"><TrendingUp size={18} /></span><span><small>Weighted forecast</small><strong>{money(OPEN_STAGES.flatMap((stage) => data.stages[stage]).reduce((total, deal) => total + deal.value * STAGE_WEIGHTS[stage], 0))}</strong></span></div><div><span className="summary-icon green"><Trophy size={18} /></span><span><small>Won</small><strong>{money(data.stages.Won.reduce((total, deal) => total + deal.value, 0))}</strong></span></div><div className="pipeline-instruction"><GripVertical size={17} /><span>Drag cards between stages, or use the stage menu on any card.</span></div></div>
+      <div className="pipeline-summary"><div><span className="summary-icon blue"><CircleDollarSign size={18} /></span><span><small>Open value</small><strong>{money(OPEN_STAGES.flatMap((stage) => data.stages[stage]).reduce((total, deal) => total + deal.value, 0))}</strong></span></div><div><span className="summary-icon purple"><TrendingUp size={18} /></span><span><small>Weighted forecast</small><strong>{money(weightedOpenValue(data.stages))}</strong></span></div><div><span className="summary-icon green"><Trophy size={18} /></span><span><small>Won</small><strong>{money(data.stages.Won.reduce((total, deal) => total + deal.value, 0))}</strong></span></div><div className="pipeline-instruction"><GripVertical size={17} /><span>Drag cards between stages, or use the stage menu on any card.</span></div></div>
       <div className="pipeline-board" aria-label="Opportunity pipeline">{PIPELINE_STAGES.map((stage) => {
         const deals = data.stages[stage].filter((deal) => `${deal.title} ${deal.contact_name} ${deal.company || ''}`.toLowerCase().includes(query.toLowerCase()));
         return <section className={`pipeline-column stage-${stageTone[stage]} ${dragOver === stage ? 'drag-over' : ''}`} key={stage} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDragOver(stage); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDragOver(null); }} onDrop={(event) => { event.preventDefault(); const id = event.dataTransfer.getData('text/plain') || dragId; if (id) move(id, stage); }}>
