@@ -28,9 +28,12 @@ export const shortDate = (value, options = {}) => value
   ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', ...options }).format(new Date(value))
   : 'No date';
 
-export const plainDate = (value) => value
-  ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`))
-  : 'No due date';
+export const plainDate = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'No due date';
+  const date = new Date(`${value}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return 'No due date';
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(date);
+};
 
 export const localDateKey = (date = new Date()) => {
   const offset = date.getTimezoneOffset();
@@ -39,9 +42,21 @@ export const localDateKey = (date = new Date()) => {
 
 export function toDateTimeLocal(value) {
   if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return value;
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
   const offset = date.getTimezoneOffset();
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+}
+
+export function fromDateTimeLocal(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return value;
+  const [date, time] = value.split('T');
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  const local = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (Number.isNaN(local.getTime())) return value;
+  return local.toISOString();
 }
 
 export function initials(name = '') {

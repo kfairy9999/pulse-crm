@@ -301,6 +301,55 @@ describe("D1 CRM CRUD and pipeline ordering", () => {
       (await api(`/contacts/${contact.id}`, { method: "DELETE" })).status,
     ).toBe(409);
   });
+  it("returns a complete stage map for the first deal on a contact without email, phone, or tags", async () => {
+    const api = await form();
+    const contact = await api("/contacts", {
+      body: {
+        first_name: "CRM verification — temporary",
+        email: "",
+        phone: "",
+        company: "Verification Co",
+        tags: "",
+      },
+    });
+    expect(contact.status).toBe(201);
+    expect(contact.body.contact.email).toBeNull();
+    expect(contact.body.contact.tags).toEqual([]);
+    const created = await api("/opportunities", {
+      body: {
+        title: "CRM verification — temporary deal",
+        contact_id: contact.body.contact.id,
+        value: 1,
+        stage: "New Lead",
+        notes: "Temporary acceptance-test deal, not a real lead",
+        expected_close_date: "",
+      },
+    });
+    expect(created.status).toBe(201);
+    const board = await api("/opportunities", { method: "GET" });
+    expect(board.status).toBe(200);
+    for (const stage of ["New Lead", "Contacted", "Booked", "Proposal", "Won", "Lost"])
+      expect(Array.isArray(board.body.stages[stage])).toBe(true);
+    expect(board.body.stages["New Lead"][0]).toMatchObject({
+      title: "CRM verification — temporary deal",
+      contact_name: "CRM verification — temporary",
+      company: "Verification Co",
+      stage: "New Lead",
+      value: 1,
+      expected_close_date: null,
+      notes: "Temporary acceptance-test deal, not a real lead",
+    });
+    const moved = await api(`/opportunities/${created.body.opportunity.id}`, {
+      method: "PATCH",
+      body: { stage: "Contacted" },
+    });
+    expect(moved.status).toBe(200);
+    const again = await api("/opportunities", { method: "GET" });
+    expect(again.body.stages.Contacted.map((deal) => deal.id)).toEqual([
+      created.body.opportunity.id,
+    ]);
+    expect(again.body.stages["New Lead"]).toEqual([]);
+  });
   it("creates appends, reorders, moves cross-column, edits values, and deletes deals", async () => {
     const api = await form(),
       a = await addContact(api, "Alpha", "Contact"),
