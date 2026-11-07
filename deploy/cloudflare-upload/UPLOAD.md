@@ -46,4 +46,4 @@ Do not set `contentType` on the connector request. Do not add an `Authorization`
 
 Read the settings and secret names again. The D1 id and plain-text vars must be unchanged, and every secret name from step 4 must still be present. This upload does not create `AUTH_PEPPER` or `SETUP_TOKEN`. Until the provider stores `AUTH_PEPPER`, the Worker correctly returns 503 and does not serve the application. The user generates those secrets outside this package; do not invent them.
 
-SHA-256: worker.js `c396e1b84e98c001ed72cad077864b90126f8d422f640f3e1d15321a8cf590e6`, metadata.json `c9df1ef8f987c0ed071cbf96487c43ddde3aa0235204ed771e92d3e8b686f497`. Uncompressed worker `434870` bytes (gzip `122715`). The Free Worker size limit is 64 MiB uncompressed.
+SHA-256: worker.js `d8bad633e5b2e1de1622fbe5c5204ea7183f43363faa9f2dbcff8f391b7dadf5`, metadata.json `c9df1ef8f987c0ed071cbf96487c43ddde3aa0235204ed771e92d3e8b686f497`. Uncompressed worker `435063` bytes (gzip `122762`). The Free Worker size limit is 64 MiB uncompressed.

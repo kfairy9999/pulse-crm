@@ -33,7 +33,7 @@ function normalizeContact(db, body, previous = null) {
     phone: optionalPhone(get('phone')),
     company: optionalText(get('company'), 'Company', 120),
     job_title: optionalText(get('job_title'), 'Job title', 120),
-    tags: has(body, 'tags') || !previous ? JSON.stringify(cleanTags(get('tags'))) : previous.tags,
+    tags: JSON.stringify(cleanTags(get('tags'))),
   };
   assertUniqueEmail(db, result.email, previous?.id);
   return result;

@@ -40,6 +40,11 @@ test('contact validation, duplicate emails, unknown records, and seed integrity 
   await request('/contacts', { method: 'POST', body: { first_name: 'Invalid', email: 'not-an-email' }, expectedStatus: 400 });
   await request('/contacts', { method: 'POST', body: { first_name: 'Invalid', phone: 'bad-phone' }, expectedStatus: 400 });
   await request('/contacts', { method: 'POST', body: { first_name: 'Invalid', tags: ['ok', 5] }, expectedStatus: 400 });
+  const untagged = await contact({ first_name: 'Untagged', tags: '' });
+  assert.deepEqual(untagged.tags, []);
+  const tagged = await request(`/contacts/${untagged.id}`, { method: 'PATCH', body: { tags: 'acceptance-test, ' }, expectedStatus: 200 });
+  assert.deepEqual(tagged.payload.contact.tags, ['acceptance-test']);
+  assert.equal((await request(`/contacts/${untagged.id}`, { method: 'PATCH', body: { company: 'Verification Co' }, expectedStatus: 200 })).payload.contact.tags[0], 'acceptance-test');
   const first = await contact({ email: 'unique@example.test' });
   await request('/contacts', { method: 'POST', body: { first_name: 'Duplicate', email: 'UNIQUE@example.test' }, expectedStatus: 409 });
   const second = await contact();
@@ -48,7 +53,7 @@ test('contact validation, duplicate emails, unknown records, and seed integrity 
   await request('/contacts/not-a-contact', { expectedStatus: 404 });
   await request(`/contacts/${first.id}/notes`, { method: 'POST', body: { body: '   ' }, expectedStatus: 400 });
   await request('/contacts', { method: 'POST', body: '{ broken', expectedStatus: 400 });
-  assert.equal((await request('/contacts', { expectedStatus: 200 })).payload.total, 2);
+  assert.equal((await request('/contacts', { expectedStatus: 200 })).payload.total, 3);
 });
 
 test('deleting contacts protects deals and explicitly detaches tasks/appointments', async (t) => {

@@ -47,10 +47,16 @@ export function optionalPhone(value) {
 }
 
 export function cleanTags(value) {
-  if (value === undefined || value === null) return [];
+  if (value === undefined || value === null || value === '') return [];
   if (typeof value === 'string') value = value.split(',');
-  if (!Array.isArray(value) || value.length > 12) fail('Tags must be a list of 12 or fewer.');
-  return [...new Set(value.map((tag) => requiredText(tag, 'Tag', 32).toLowerCase()))];
+  if (!Array.isArray(value)) fail('Tags must be a list of 12 or fewer.');
+  const tags = [];
+  for (const tag of value) {
+    if (typeof tag === 'string' && !tag.trim()) continue;
+    tags.push(requiredText(tag, 'Tag', 32));
+  }
+  if (tags.length > 12) fail('Tags must be a list of 12 or fewer.');
+  return [...new Set(tags.map((tag) => tag.toLowerCase()))];
 }
 
 export function moneyToCents(value, required = false) {

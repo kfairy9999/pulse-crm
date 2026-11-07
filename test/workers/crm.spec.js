@@ -245,6 +245,33 @@ describe("D1 CRM CRUD and pipeline ordering", () => {
       body: { body: "Follow up after the technical review." },
     });
     expect(note.status).toBe(201);
+    const blank = await api("/contacts", {
+      body: { first_name: "Untagged", tags: "" },
+    });
+    expect(blank.status).toBe(201);
+    expect(blank.body.contact.tags).toEqual([]);
+    expect(
+      (
+        await api(`/contacts/${blank.body.contact.id}`, {
+          method: "PATCH",
+          body: { tags: "acceptance-test, " },
+        })
+      ).body.contact.tags,
+    ).toEqual(["acceptance-test"]);
+    for (const method of ["PATCH", "DELETE"])
+      expect(
+        (
+          await api(`/contacts/${contact.id}/notes/${note.body.note.id}`, {
+            method,
+            body: method === "DELETE" ? undefined : { body: "Edited note" },
+          })
+        ).status,
+      ).toBe(404);
+    expect(
+      (
+        await api(`/contacts/${contact.id}`, { method: "GET", body: null })
+      ).body.notes.map((item) => item.body),
+    ).toEqual(["Follow up after the technical review."]);
     expect(
       (
         await api(`/contacts/${contact.id}`, {
