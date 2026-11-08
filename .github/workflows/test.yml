@@ -18,4 +18,40 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Prepare Chrome
+        run: |
+          set -eu
+          echo "Candidate binaries:"
+          ls -l /usr/bin/google-chrome /usr/bin/google-chrome-stable /usr/local/bin/google-chrome 2>&1 || true
+          launch() {
+            bin="$1"
+            if [ ! -x "$bin" ]; then
+              echo "Missing $bin"
+              return 1
+            fi
+            echo "Trying $bin"
+            "$bin" --version
+            dir="$(mktemp -d)"
+            if ! "$bin" --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --dump-dom about:blank >"$dir/dom.txt" 2>"$dir/err.txt"; then
+              echo "Headless launch failed for $bin"
+              cat "$dir/err.txt" || true
+              return 1
+            fi
+            if ! grep -q '<html' "$dir/dom.txt"; then
+              echo "Headless DOM was empty for $bin"
+              cat "$dir/err.txt" || true
+              return 1
+            fi
+            echo "CHROME_BIN=$bin" >> "$GITHUB_ENV"
+            echo "Headless DOM check passed with $bin"
+          }
+          if launch /usr/bin/google-chrome || launch /usr/bin/google-chrome-stable || launch /usr/local/bin/google-chrome; then
+            exit 0
+          fi
+          echo "Preinstalled Chrome did not launch. Installing the stable package."
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates
+          wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y /tmp/google-chrome.deb
+          launch /usr/bin/google-chrome
       - run: npm test

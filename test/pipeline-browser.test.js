@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -24,9 +24,26 @@ function listen(server) {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
 }
 
+function chromeBinary() {
+  const candidates = [process.env.CHROME_BIN, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/local/bin/google-chrome'].filter(Boolean);
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    try {
+      const version = execFileSync(candidate, ['--version'], { encoding: 'utf8', timeout: 15000 }).trim();
+      if (version) return { path: candidate, version };
+    } catch { /* A path can exist and still not be a launchable browser. */ }
+  }
+  return null;
+}
+
 test('production bundle renders the first deal from an HTTP opportunity payload', async (t) => {
-  const chrome = ['/usr/local/bin/google-chrome', '/usr/bin/google-chrome-stable'].find((candidate) => existsSync(candidate));
-  if (!chrome) { t.skip('Chrome is not installed'); return; }
+  const chrome = chromeBinary();
+  if (!chrome) {
+    assert.equal(process.env.CI, undefined, 'CI must provide a launchable Chrome. The first-deal render was not checked.');
+    t.skip('Chrome is not installed');
+    return;
+  }
+  console.log(`Chrome ${chrome.version} at ${chrome.path}`);
   const root = path.resolve('dist');
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, 'http://127.0.0.1');
@@ -47,14 +64,23 @@ test('production bundle renders the first deal from an HTTP opportunity payload'
   });
   const port = await listen(server);
   t.after(() => server.close());
-  const userData = path.join('/tmp', `pulse-browser-${process.pid}`);
-  const browser = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=9334', `--user-data-dir=${userData}`, 'about:blank'], { stdio: 'ignore' });
+  const userData = path.join('/tmp', `pulse-browser-${process.pid}-${Date.now()}`);
+  let chromeError = '';
+  let chromeExit = null;
+  const browser = spawn(chrome.path, ['--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${userData}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  browser.stderr?.on('data', (chunk) => { chromeError = `${chromeError}${chunk}`.slice(-800); });
+  browser.once('exit', (code, signal) => { chromeExit = { code, signal }; });
   t.after(() => browser.kill('SIGTERM'));
   let version;
-  for (let attempt = 0; attempt < 40 && !version; attempt += 1) {
-    try { version = await fetch('http://127.0.0.1:9334/json/version').then((r) => r.json()); } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
+  for (let attempt = 0; attempt < 150 && !version && !chromeExit; attempt += 1) {
+    try {
+      const active = await readFile(path.join(userData, 'DevToolsActivePort'), 'utf8');
+      const debugPort = Number(active.split('\n')[0]);
+      if (debugPort) version = await fetch(`http://127.0.0.1:${debugPort}/json/version`).then((response) => response.json());
+    } catch { /* Chrome is still starting. */ }
+    if (!version) await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  assert.ok(version, 'Chrome DevTools did not start');
+  assert.ok(version, `Chrome DevTools did not start from ${chrome.path} (${chrome.version}). exit=${JSON.stringify(chromeExit)} stderr=${chromeError}`);
   const ws = new WebSocket(version.webSocketDebuggerUrl);
   let sequence = 0;
   const pending = new Map();
