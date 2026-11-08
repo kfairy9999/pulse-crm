@@ -1,0 +1,30 @@
+{
+  "endpoint": "PUT /accounts/{account_id}/workers/scripts/pulse-crm",
+  "account_id": "f0d8472cc77b71cb083b6b9824e909c3",
+  "script_name": "pulse-crm",
+  "existing_origin": "https://pulse-crm.kfairley9999.workers.dev",
+  "existing_d1": "7b391a6a-415e-4ad9-ae5d-eeaff7b3ded3",
+  "note": "Upload only metadata and worker.js. This package does not call the assets upload session and does not contain secrets.",
+  "do_not_upload": [
+    "UPLOAD.md",
+    "modules.json",
+    "SHA256SUMS"
+  ],
+  "parts": [
+    {
+      "name": "metadata",
+      "filename": "metadata.json",
+      "content_type": "application/json",
+      "bytes": 1006,
+      "sha256": "c9df1ef8f987c0ed071cbf96487c43ddde3aa0235204ed771e92d3e8b686f497"
+    },
+    {
+      "name": "worker.js",
+      "filename": "worker.js",
+      "content_type": "application/javascript+module",
+      "bytes": 469790,
+      "sha256": "da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72",
+      "gzip_bytes": 132039
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pulse-crm-local-test",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "404-page",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "local-test-only",
+      "database_id": "local-test-only",
+    },
+  ],
+  "vars": {
+    "APP_ORIGIN": "https://pulse.test",
+    "SESSION_TTL_DAYS": "7",
+    "AUTH_PEPPER_ID": "local-test-v1",
+  },
+}
