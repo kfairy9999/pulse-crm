@@ -6,6 +6,7 @@ import {
   DomainError, PIPELINE_STAGES, STAGE_WEIGHTS, TASK_PRIORITIES, TASK_STATUSES,
   requiredText, optionalText, optionalEmail, optionalPhone, cleanTags,
   moneyToCents, isoDateTime, dueDate, choice, booleanValue, positiveInteger,
+  ownerCalendarDate, pipelineMonthBuckets,
 } from '../shared.js';
 import {
   id, now, transaction, mapContact, mapOpportunity, getContact, getOpportunity,
@@ -75,20 +76,11 @@ export function createApp({ db, staticDir = DIST, auth = { enabled: false } } = 
     const lost = opportunities.filter((item) => item.stage === 'Lost');
     const openValue = open.reduce((sum, item) => sum + item.value_cents, 0);
     const weightedValue = open.reduce((sum, item) => sum + Math.round(item.value_cents * STAGE_WEIGHTS[item.stage]), 0);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = ownerCalendarDate();
     const tasks = db.prepare(`SELECT t.*, TRIM(c.first_name || ' ' || c.last_name) AS contact_name FROM tasks t LEFT JOIN contacts c ON c.id = t.contact_id ORDER BY CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date, CASE t.priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, t.created_at DESC LIMIT 8`).all();
     const upcoming = db.prepare(`SELECT a.*, TRIM(c.first_name || ' ' || c.last_name) AS contact_name FROM appointments a LEFT JOIN contacts c ON c.id = a.contact_id WHERE a.starts_at >= ? ORDER BY a.starts_at LIMIT 5`).all(now());
     const activity = db.prepare(`SELECT a.*, TRIM(c.first_name || ' ' || c.last_name) AS contact_name FROM activities a LEFT JOIN contacts c ON c.id = a.contact_id ORDER BY a.created_at DESC LIMIT 8`).all();
-    const monthly = Array.from({ length: 6 }, (_, index) => {
-      const date = new Date();
-      date.setUTCDate(1);
-      date.setUTCMonth(date.getUTCMonth() - (5 - index));
-      const key = date.toISOString().slice(0, 7);
-      return {
-        month: date.toLocaleString('en', { month: 'short', timeZone: 'UTC' }), key,
-        value: opportunities.filter((item) => item.updated_at.startsWith(key) && item.stage !== 'Lost').reduce((sum, item) => sum + item.value_cents, 0) / 100,
-      };
-    });
+    const monthly = pipelineMonthBuckets(opportunities);
     res.json({
       metrics: {
         openPipeline: openValue / 100,
@@ -265,7 +257,7 @@ export function createApp({ db, staticDir = DIST, auth = { enabled: false } } = 
     const status = req.query.status ? choice(req.query.status, ['All', ...TASK_STATUSES], 'Status') : 'All';
     const tasks = db.prepare(`SELECT t.*, TRIM(c.first_name || ' ' || c.last_name) AS contact_name FROM tasks t LEFT JOIN contacts c ON c.id = t.contact_id ORDER BY CASE t.status WHEN 'Open' THEN 0 ELSE 1 END, CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date, CASE t.priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, t.created_at DESC`).all();
     const filtered = status === 'All' ? tasks : tasks.filter((task) => task.status === status);
-    res.json({ tasks: filtered, counts: { all: tasks.length, open: tasks.filter((task) => task.status === 'Open').length, completed: tasks.filter((task) => task.status === 'Completed').length, highPriority: tasks.filter((task) => task.status === 'Open' && task.priority === 'High').length }, today: new Date().toISOString().slice(0, 10) });
+    res.json({ tasks: filtered, counts: { all: tasks.length, open: tasks.filter((task) => task.status === 'Open').length, completed: tasks.filter((task) => task.status === 'Completed').length, highPriority: tasks.filter((task) => task.status === 'Open' && task.priority === 'High').length }, today: ownerCalendarDate() });
   }));
 
   app.get('/api/tasks/:taskId', route((req, res) => res.json({ task: getTask(db, req.params.taskId) })));

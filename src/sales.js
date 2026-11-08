@@ -9,6 +9,8 @@ import {
   cleanTags,
   dueDate,
   choice,
+  followUpDueDate,
+  ownerCalendarDate,
 } from "./shared.js";
 import { id, now, one, all, statement, insertSQL, activity } from "./d1.js";
 
@@ -272,15 +274,13 @@ export async function applyStageRules(db, opportunity) {
   for (const rule of rules) {
     const key = `${rule.id}:${opportunity.id}`;
     if (workspace.spawned[key]) continue;
-    const due = new Date();
-    due.setUTCDate(due.getUTCDate() + Number(rule.dueInDays || 0));
     const stamp = now();
     const taskId = id();
     const fields = {
       id: taskId,
       title: rule.title,
       contact_id: opportunity.contact_id,
-      due_date: due.toISOString().slice(0, 10),
+      due_date: followUpDueDate(rule.dueInDays),
       priority: rule.priority,
       status: "Open",
       notes: `Local follow-up for ${opportunity.title}. Nothing is sent.`,
@@ -357,7 +357,7 @@ export async function removeView(db, viewId) {
 }
 
 export async function buildReport(db) {
-  const today = now().slice(0, 10);
+  const today = ownerCalendarDate();
   const [stages, overdue, dueToday, companies] = await Promise.all([
     all(db, "SELECT stage, COUNT(*) AS deals, COALESCE(SUM(value_cents),0) AS value_cents FROM opportunities GROUP BY stage"),
     one(db, "SELECT COUNT(*) AS count FROM tasks WHERE status='Open' AND due_date IS NOT NULL AND due_date < ?", today),

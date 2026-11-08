@@ -15,6 +15,8 @@ import {
   choice,
   booleanValue,
   positiveInteger,
+  ownerCalendarDate,
+  pipelineMonthBuckets,
 } from "./shared.js";
 import {
   id,
@@ -200,20 +202,7 @@ function dashboardResult(
     won = opportunities.filter((x) => x.stage === "Won"),
     lost = opportunities.filter((x) => x.stage === "Lost"),
     sum = (a) => a.reduce((n, x) => n + x.value_cents, 0);
-  const monthly = Array.from({ length: 6 }, (_, i) => {
-    const date = new Date();
-    date.setUTCDate(1);
-    date.setUTCMonth(date.getUTCMonth() - (5 - i));
-    const key = date.toISOString().slice(0, 7);
-    return {
-      month: date.toLocaleString("en", { month: "short", timeZone: "UTC" }),
-      key,
-      value:
-        opportunities
-          .filter((x) => x.updated_at.startsWith(key) && x.stage !== "Lost")
-          .reduce((n, x) => n + x.value_cents, 0) / 100,
-    };
-  });
+  const monthly = pipelineMonthBuckets(opportunities);
   return {
     metrics: {
       openPipeline: sum(open) / 100,
@@ -294,7 +283,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         statement(
           db,
           "SELECT (SELECT COUNT(*) FROM contacts) AS contacts,(SELECT COUNT(*) FROM tasks WHERE status='Open') AS tasks,(SELECT COUNT(*) FROM tasks WHERE status='Open' AND due_date=?) AS today",
-          now().slice(0, 10),
+          ownerCalendarDate(),
         ),
       ]);
     return json(
@@ -584,7 +573,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
           (t) => t.status === "Open" && t.priority === "High",
         ).length,
       },
-      today: now().slice(0, 10),
+      today: ownerCalendarDate(),
     });
   }
   if (method === "POST" && path === "/api/tasks") {

@@ -22,9 +22,9 @@
       "name": "worker.js",
       "filename": "worker.js",
       "content_type": "application/javascript+module",
-      "bytes": 467053,
-      "sha256": "966a8b816eedc4173ff77acf4c68101dd7f99962c8815845ae384787ba7789a5",
-      "gzip_bytes": 131004
+      "bytes": 469790,
+      "sha256": "da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72",
+      "gzip_bytes": 132039
     }
   ]
 }
