@@ -75,6 +75,74 @@ export function isoDateTime(value, field = 'Start time') {
   return new Date(value).toISOString();
 }
 
+export const OWNER_TIME_ZONE = "America/Los_Angeles";
+
+export function ownerCalendarDate(instant = new Date()) {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: OWNER_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const pick = (type) => parts.find((part) => part.type === type)?.value;
+  const year = pick("year");
+  const month = pick("month");
+  const day = pick("day");
+  if (!year || !month || !day) return null;
+  return `${year}-${month}-${day}`;
+}
+
+export function addCalendarDays(isoDate, days) {
+  if (typeof isoDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return null;
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.toISOString().slice(0, 10) !== isoDate) return null;
+  const offset = Number(days);
+  if (!Number.isFinite(offset)) return null;
+  date.setUTCDate(date.getUTCDate() + Math.trunc(offset));
+  return date.toISOString().slice(0, 10);
+}
+
+export function followUpDueDate(dueInDays, instant = new Date()) {
+  const days = Number(dueInDays);
+  const offset = Number.isFinite(days) ? Math.min(90, Math.max(0, Math.trunc(days))) : 0;
+  return addCalendarDays(ownerCalendarDate(instant), offset);
+}
+
+export function shiftCalendarMonths(yearMonth, delta) {
+  const match = /^(\d{4})-(\d{2})$/.exec(yearMonth || "");
+  if (!match) return null;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1 + Number(delta), 1));
+  return date.toISOString().slice(0, 7);
+}
+
+export function ownerMonthSeries(instant = new Date(), length = 6) {
+  const current = ownerCalendarDate(instant)?.slice(0, 7);
+  return Array.from({ length }, (_, index) => {
+    const key = shiftCalendarMonths(current, index - (length - 1));
+    const [year, month] = key.split("-").map(Number);
+    return {
+      key,
+      month: new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en", { month: "short", timeZone: "UTC" }),
+    };
+  });
+}
+
+export function recordMonthKey(instant) {
+  return ownerCalendarDate(instant)?.slice(0, 7) || null;
+}
+
+export function pipelineMonthBuckets(records, instant = new Date()) {
+  return ownerMonthSeries(instant).map((bucket) => ({
+    ...bucket,
+    value: records
+      .filter((item) => item.stage !== "Lost" && recordMonthKey(item.updated_at) === bucket.key)
+      .reduce((sum, item) => sum + item.value_cents, 0) / 100,
+  }));
+}
+
 export function dueDate(value) {
   if (value === '' || value === null || value === undefined) return null;
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {

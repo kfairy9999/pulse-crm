@@ -2,6 +2,7 @@ import { it, expect } from "vitest";
 import { env } from "cloudflare:workers";
 import { deriveCredential } from "../../src/auth/password.js";
 import worker from "../../src/worker.js";
+import { addCalendarDays, followUpDueDate, ownerCalendarDate } from "../../src/shared.js";
 
 async function call(path, options = {}) {
   const headers = new Headers({
@@ -87,7 +88,9 @@ it("reports stage totals and creates one follow-up task for a stage rule and a r
   await call(`/opportunities/${deal.body.opportunity.id}`, { method: "PATCH", headers: auth, body: JSON.stringify({ stage: "Contacted" }) });
   await call(`/opportunities/${deal.body.opportunity.id}`, { method: "PATCH", headers: auth, body: JSON.stringify({ stage: "Contacted" }) });
   const tasks = await call("/tasks", { headers: auth });
-  expect(tasks.body.tasks.filter((task) => task.title === "Call after contact")).toHaveLength(1);
+  const followUps = tasks.body.tasks.filter((task) => task.title === "Call after contact");
+  expect(followUps).toHaveLength(1);
+  expect(followUps[0].due_date).toBe(followUpDueDate(1));
   const follow = await call("/tasks", { method: "POST", headers: auth, body: JSON.stringify({ title: "Weekly check-in", due_date: "2026-11-07", recurrence: "weekly", contact_id: contact.body.contact.id }) });
   expect(follow.status).toBe(201);
   const done = await call(`/tasks/${follow.body.task.id}`, { method: "PATCH", headers: auth, body: JSON.stringify({ completed: true }) });
@@ -128,4 +131,27 @@ it("clears weekly recurrence with an edit PATCH and does not spawn another copy"
   const off = await call(`/stage-rules/${paused.body.rule.id}`, { method: "PATCH", headers: auth, body: JSON.stringify({ enabled: false }) });
   expect(off.body.rule.enabled).toBe(false);
   expect((await call("/stage-rules", { headers: auth })).body.rules[0].enabled).toBe(false);
+});
+
+it("counts overdue and due-today tasks on the Los Angeles calendar day", async () => {
+  const auth = await owner();
+  const today = ownerCalendarDate();
+  const rows = [
+    ["Yesterday follow-up", addCalendarDays(today, -1)],
+    ["Today follow-up", today],
+    ["Tomorrow follow-up", addCalendarDays(today, 1)],
+  ];
+  for (const [title, due_date] of rows) {
+    const created = await call("/tasks", { method: "POST", headers: auth, body: JSON.stringify({ title, due_date, priority: "Medium" }) });
+    expect(created.status).toBe(201);
+    expect(created.body.task.due_date).toBe(due_date);
+  }
+  const tasks = await call("/tasks", { headers: auth });
+  expect(tasks.body.today).toBe(today);
+  const report = await call("/reports", { headers: auth });
+  expect(report.body.dueToday).toBe(1);
+  expect(report.body.overdueFollowUps).toBe(1);
+  const dashboard = await call("/dashboard", { headers: auth });
+  expect(dashboard.body.metrics.dueToday).toBe(1);
+  expect(dashboard.body.monthly.at(-1).key).toBe(today.slice(0, 7));
 });

@@ -2,7 +2,7 @@ import { ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckSquare, Circle
 import { ErrorState, LoadingState, Avatar, Button, Pill, Tag, TaskCheckbox } from '../components/UI.jsx';
 import { money, plainDate, relativeTime, shortDate } from '../api.js';
 import { useResource } from '../hooks.js';
-import { STAGE_WEIGHTS } from '../../shared.js';
+import { STAGE_WEIGHTS, ownerCalendarDate } from '../../shared.js';
 
 const activityIcons = { task: CheckSquare, appointment: CalendarDays, opportunity: BriefcaseBusiness, contact: ContactRound, note: MessageSquareText };
 const activityColors = { task: 'green', appointment: 'purple', opportunity: 'blue', contact: 'orange', note: 'rose' };
@@ -46,7 +46,7 @@ export function DashboardView({ data, navigate, openForm, toggleTask, sampleData
     <div className="dashboard-main-grid">
       <RevenueChart monthly={monthly} />
       <section className="panel priority-panel"><div className="panel-header"><div><span className="eyebrow">Your next moves</span><h2>Priority tasks</h2></div><button className="text-button" onClick={() => navigate('tasks')}>See all <ArrowRight size={14} /></button></div>
-        <div className="dashboard-task-list">{todo.length ? todo.map((task) => <div className="dashboard-task" key={task.id}><TaskCheckbox task={task} onToggle={toggleTask} /><div className="dashboard-task-content"><strong>{task.title}</strong><span>{task.contact_name || 'Personal task'} <span className="middot">·</span> <span className={task.due_date && task.due_date <= new Date().toISOString().slice(0, 10) ? 'task-overdue' : ''}>{plainDate(task.due_date)}</span></span></div><Tag tone={task.priority === 'High' ? 'rose' : 'neutral'}>{task.priority}</Tag></div>) : <div className="small-empty"><Check size={19} /><span>All clear. Add a task to keep things moving.</span><button onClick={() => openForm('task')}>Add task</button></div>}</div>
+        <div className="dashboard-task-list">{todo.length ? todo.map((task) => <div className="dashboard-task" key={task.id}><TaskCheckbox task={task} onToggle={toggleTask} /><div className="dashboard-task-content"><strong>{task.title}</strong><span>{task.contact_name || 'Personal task'} <span className="middot">·</span> <span className={task.due_date && task.due_date <= ownerCalendarDate() ? 'task-overdue' : ''}>{plainDate(task.due_date)}</span></span></div><Tag tone={task.priority === 'High' ? 'rose' : 'neutral'}>{task.priority}</Tag></div>) : <div className="small-empty"><Check size={19} /><span>All clear. Add a task to keep things moving.</span><button onClick={() => openForm('task')}>Add task</button></div>}</div>
       </section>
     </div>
     <div className="dashboard-bottom-grid">
