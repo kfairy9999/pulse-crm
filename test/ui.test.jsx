@@ -93,6 +93,15 @@ test('tasks and schedule screens render saved records', () => {
   assert.match(schedule, /Local schedule only/);
 });
 
+test('task repeat shows weekly and an explicit does-not-repeat choice', () => {
+  const weekly = renderToStaticMarkup(<TaskForm record={{ id: 't1', title: 'Weekly check', status: 'Open', recurrence: 'weekly', priority: 'Medium' }} contacts={[]} onClose={() => {}} onSaved={() => {}} />);
+  assert.match(weekly, /Saved repeat: Repeats weekly/);
+  assert.match(weekly, /value="weekly" selected/);
+  const off = renderToStaticMarkup(<TaskForm record={{ id: 't2', title: 'One time', status: 'Open', recurrence: null, priority: 'Medium' }} contacts={[]} onClose={() => {}} onSaved={() => {}} />);
+  assert.match(off, /Saved repeat: Does not repeat/);
+  assert.match(off, /value="none" selected/);
+});
+
 test('no contacts creates a genuine prerequisite for opportunities', () => {
   const markup = renderToStaticMarkup(<OpportunityForm contacts={[]} onClose={() => {}} onSaved={() => {}} />);
   assert.match(markup, /A contact comes first/);

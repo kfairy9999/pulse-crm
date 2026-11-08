@@ -96,3 +96,36 @@ it("reports stage totals and creates one follow-up task for a stage rule and a r
   expect(second.body.followUp).toBeNull();
   expect((await call("/tasks", { headers: auth })).body.tasks.filter((task) => task.title === "Weekly check-in")).toHaveLength(2);
 });
+
+it("clears weekly recurrence with an edit PATCH and does not spawn another copy", async () => {
+  const auth = await owner();
+  const created = await call("/tasks", {
+    method: "POST",
+    headers: auth,
+    body: JSON.stringify({ title: "CRM upgrade — temporary weekly recurrence test", due_date: "2026-11-08", recurrence: "weekly" }),
+  });
+  expect(created.status).toBe(201);
+  const listed = await call("/tasks", { headers: auth });
+  expect(listed.body.tasks.find((task) => task.id === created.body.task.id).recurrence).toBe("weekly");
+  await call(`/tasks/${created.body.task.id}`, { method: "PATCH", headers: auth, body: JSON.stringify({ completed: true }) });
+  const afterSpawn = await call("/tasks", { headers: auth });
+  const generated = afterSpawn.body.tasks.find((task) => task.title === "CRM upgrade — temporary weekly recurrence test" && task.status === "Open");
+  expect(generated.due_date).toBe("2026-11-15");
+  expect(generated.recurrence).toBe("weekly");
+  const cleared = await call(`/tasks/${generated.id}`, {
+    method: "PATCH",
+    headers: auth,
+    body: JSON.stringify({ title: generated.title, due_date: generated.due_date, priority: generated.priority, status: "Open", recurrence: "none" }),
+  });
+  expect(cleared.status).toBe(200);
+  expect(cleared.body.task.recurrence).toBeNull();
+  expect(cleared.body.followUp).toBeNull();
+  const reread = await call(`/tasks/${generated.id}`, { headers: auth });
+  expect(reread.body.task.recurrence).toBeNull();
+  await call(`/tasks/${generated.id}`, { method: "PATCH", headers: auth, body: JSON.stringify({ completed: true }) });
+  expect((await call("/tasks", { headers: auth })).body.tasks.filter((task) => task.title === "CRM upgrade — temporary weekly recurrence test")).toHaveLength(2);
+  const paused = await call("/stage-rules", { method: "POST", headers: auth, body: JSON.stringify({ stage: "Lost", title: "Do not create", dueInDays: 1, priority: "Low" }) });
+  const off = await call(`/stage-rules/${paused.body.rule.id}`, { method: "PATCH", headers: auth, body: JSON.stringify({ enabled: false }) });
+  expect(off.body.rule.enabled).toBe(false);
+  expect((await call("/stage-rules", { headers: auth })).body.rules[0].enabled).toBe(false);
+});

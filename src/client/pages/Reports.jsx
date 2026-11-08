@@ -29,9 +29,7 @@ export default function Reports({ notify }) {
       </section>
       <section className="panel" style={{ padding: 16, marginBottom: 16 }}>
         <h2>Pipeline by stage</h2>
-        <div className="contacts-table-wrap"><table className="contacts-table"><thead><tr><th>Stage</th><th>Deals</th><th>Value</th></tr></thead><tbody>
-          {PIPELINE_STAGES.map((stage) => <tr key={stage}><td>{stage}</td><td>{data.stages[stage].deals}</td><td>{money(data.stages[stage].value)}</td></tr>)}
-        </tbody></table></div>
+        <ul className="report-stages">{PIPELINE_STAGES.map((stage) => <li key={stage}><span>{stage}</span><span><strong>{data.stages[stage].deals}</strong> deals</span><span>{money(data.stages[stage].value)}</span></li>)}</ul>
         <p className="muted">{data.note}</p>
       </section>
       <section className="panel" style={{ padding: 16, marginBottom: 16 }}>
@@ -41,8 +39,9 @@ export default function Reports({ notify }) {
     </>}
     <section className="panel" style={{ padding: 16 }}>
       <h2>Deal follow-up rules</h2>
-      <p className="muted">When a deal enters a stage, Pulse adds one local task. It does not send email, texts, or calendar invites.</p>
-      {rules.data?.rules?.map((rule) => <div className="related-row" key={rule.id}><span>{rule.stage}: {rule.title}</span><IconButton label={`Delete ${rule.title}`} onClick={async () => { await api(`/stage-rules/${rule.id}`, { method: 'DELETE' }); rules.reload(true); }}><Trash2 size={14} /></IconButton></div>)}
+      <p className="muted">Saved rules are listed here. An active rule adds one local task when a deal enters its stage. Pause leaves the rule inactive. Delete removes it. Do not save a rule for a stage you are about to use unless you want that task.</p>
+      {rules.data && !rules.data.rules.length ? <p>No follow-up rules. Moving a deal will not create a task.</p> : null}
+      <ul className="report-stages" aria-label="Saved follow-up rules">{rules.data?.rules?.map((rule) => <li key={rule.id}><span>{rule.stage}: {rule.title}</span><span>{rule.enabled === false ? 'Paused' : 'Active'}</span><span><Button onClick={async () => { await api(`/stage-rules/${rule.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: rule.enabled === false }) }); rules.reload(true); }}>{rule.enabled === false ? 'Turn on' : 'Pause'}</Button><IconButton label={`Delete ${rule.title}`} onClick={async () => { await api(`/stage-rules/${rule.id}`, { method: 'DELETE' }); rules.reload(true); }}><Trash2 size={14} /></IconButton></span></li>)}</ul>
       <form onSubmit={saveRule} className="form-grid">
         <FormField label="Stage"><Select name="stage" value={draft.stage} onChange={(event) => setDraft({ ...draft, stage: event.target.value })}>{PIPELINE_STAGES.map((stage) => <option key={stage}>{stage}</option>)}</Select></FormField>
         <FormField label="Local task"><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required maxLength={180} /></FormField>

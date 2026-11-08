@@ -219,9 +219,13 @@ export function assertBackupPreview(body) {
 }
 
 export async function rememberRecurrence(db, taskId, recurrence, due) {
-  if (!recurrence) return;
-  const choiceValue = choice(recurrence, RECURRENCES, "Repeat");
   const workspace = await loadWorkspace(db);
+  if (!recurrence) {
+    delete workspace.tasks[taskId];
+    await saveWorkspace(db, workspace);
+    return;
+  }
+  const choiceValue = choice(recurrence, RECURRENCES, "Repeat");
   const current = workspace.tasks[taskId] || {};
   workspace.tasks[taskId] = { recurrence: choiceValue, seriesId: current.seriesId || taskId, due: due || current.due || null };
   await saveWorkspace(db, workspace);
@@ -263,7 +267,7 @@ export async function spawnNextRecurrence(db, previous, input) {
 
 export async function applyStageRules(db, opportunity) {
   const workspace = await loadWorkspace(db);
-  const rules = workspace.rules.filter((rule) => rule.stage === opportunity.stage);
+  const rules = workspace.rules.filter((rule) => rule.enabled !== false && rule.stage === opportunity.stage);
   let created = 0;
   for (const rule of rules) {
     const key = `${rule.id}:${opportunity.id}`;
@@ -309,7 +313,7 @@ function cleanRule(body) {
 export async function addRule(db, body) {
   const workspace = await loadWorkspace(db);
   if (workspace.rules.length >= 12) throw new DomainError("You can save up to 12 follow-up rules.");
-  const rule = cleanRule(body);
+  const rule = { ...cleanRule(body), enabled: true };
   if (workspace.rules.some((item) => item.stage === rule.stage && item.title === rule.title))
     throw new DomainError("That follow-up rule already exists.");
   workspace.rules.push(rule);
@@ -321,6 +325,15 @@ export async function removeRule(db, ruleId) {
   const workspace = await loadWorkspace(db);
   workspace.rules = workspace.rules.filter((rule) => rule.id !== ruleId);
   await saveWorkspace(db, workspace);
+}
+
+export async function setRuleEnabled(db, ruleId, enabled) {
+  const workspace = await loadWorkspace(db);
+  const rule = workspace.rules.find((item) => item.id === ruleId);
+  if (!rule) throw new DomainError("Follow-up rule not found.", 404);
+  rule.enabled = Boolean(enabled);
+  await saveWorkspace(db, workspace);
+  return rule;
 }
 
 export async function addView(db, body) {
@@ -402,7 +415,7 @@ export async function commitImport(db, csv, mapping) {
 }
 
 export function recurrenceChoice(value) {
-  if (!value) return null;
+  if (value == null || value === "" || value === "none") return null;
   return choice(value, RECURRENCES, "Repeat");
 }
 

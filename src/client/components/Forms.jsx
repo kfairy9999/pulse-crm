@@ -73,7 +73,8 @@ export function TaskForm({ record, contacts, onClose, onSaved }) {
       <FormField label="Contact" optional className="field-full"><ContactSelect contacts={contacts} defaultValue={record?.contact_id} /></FormField>
       <FormField label="Due date" optional><input name="due_date" type="date" defaultValue={record?.due_date || ''} /></FormField>
       <FormField label="Priority"><Select name="priority" defaultValue={record?.priority || 'Medium'}>{TASK_PRIORITIES.map((priority) => <option key={priority}>{priority}</option>)}</Select></FormField>
-      <FormField label="Repeat" optional hint="When you complete it, Pulse adds the next local task. Nothing is sent."><Select name="recurrence" defaultValue=""><option value="">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></Select></FormField>
+      <FormField label="Repeat" optional hint="The closed menu shows the saved choice. Choose Does not repeat and save to stop future copies. Nothing is sent."><Select name="recurrence" aria-label="Repeat" defaultValue={record?.recurrence || 'none'}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></Select></FormField>
+      <p className="field-hint">Saved repeat: {record?.recurrence ? `Repeats ${record.recurrence}` : 'Does not repeat'}.</p>
       {record?.id && <FormField label="Status" className="field-full"><Select name="status" defaultValue={record.status}><option>Open</option><option>Completed</option></Select></FormField>}
       <FormField label="Notes" optional className="field-full"><textarea name="notes" defaultValue={record?.notes || ''} maxLength={4000} placeholder="Add useful context…" rows="3" /></FormField>
     </>}
