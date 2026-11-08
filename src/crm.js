@@ -53,6 +53,7 @@ import {
   rememberRecurrence,
   removeRule,
   removeView,
+  setRuleEnabled,
   spawnNextRecurrence,
 } from "./sales.js";
 import {
@@ -259,6 +260,8 @@ export async function handleCrm(request, env, { method, path, body, url }) {
   }
   if (method === "GET" && path === "/api/stage-rules") return json({ rules: (await loadWorkspace(db)).rules });
   if (method === "POST" && path === "/api/stage-rules") return json({ rule: await addRule(db, body) }, 201);
+  if (method === "PATCH" && path.startsWith("/api/stage-rules/"))
+    return json({ rule: await setRuleEnabled(db, decodeURIComponent(path.slice("/api/stage-rules/".length)), body?.enabled) });
   if (method === "DELETE" && path.startsWith("/api/stage-rules/")) {
     await removeRule(db, decodeURIComponent(path.slice("/api/stage-rules/".length)));
     return json({ deleted: true });
@@ -568,6 +571,8 @@ export async function handleCrm(request, env, { method, path, body, url }) {
       db,
       "SELECT t.*,TRIM(c.first_name||' '||c.last_name) AS contact_name FROM tasks t LEFT JOIN contacts c ON c.id=t.contact_id ORDER BY CASE t.status WHEN 'Open' THEN 0 ELSE 1 END,CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END,t.due_date,CASE t.priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END,t.created_at DESC",
     );
+    const plans = (await loadWorkspace(db)).tasks;
+    for (const task of tasks) task.recurrence = plans[task.id]?.recurrence || null;
     return json({
       tasks:
         status === "All" ? tasks : tasks.filter((t) => t.status === status),
@@ -593,13 +598,18 @@ export async function handleCrm(request, env, { method, path, body, url }) {
       "tasks",
       activity("task", `Created task ${fields.title}`, fields.contact_id),
     );
-    if (body?.recurrence) await rememberRecurrence(db, fields.id, recurrenceChoice(body.recurrence), fields.due_date);
+    if (Object.prototype.hasOwnProperty.call(body || {}, "recurrence"))
+      await rememberRecurrence(db, fields.id, body.recurrence ? recurrenceChoice(body.recurrence) : null, fields.due_date);
     return json({ task: await getTask(db, fields.id) }, 201);
   }
   match = path.match(/^\/api\/tasks\/([^/]+)$/);
   if (match) {
     const tid = decodeURIComponent(match[1]);
-    if (method === "GET") return json({ task: await getTask(db, tid) });
+    if (method === "GET") {
+      const task = await getTask(db, tid);
+      task.recurrence = (await loadWorkspace(db)).tasks[tid]?.recurrence || null;
+      return json({ task });
+    }
     if (method === "PATCH") {
       const previous = await getTask(db, tid),
         input = await taskInput(db, body, previous);
@@ -616,9 +626,12 @@ export async function handleCrm(request, env, { method, path, body, url }) {
           input.contact_id,
         ),
       );
-      if (body?.recurrence) await rememberRecurrence(db, tid, recurrenceChoice(body.recurrence), input.due_date);
+      if (Object.prototype.hasOwnProperty.call(body || {}, "recurrence"))
+        await rememberRecurrence(db, tid, recurrenceChoice(body.recurrence), input.due_date);
       const followUp = await spawnNextRecurrence(db, previous, input);
-      return json({ task: await getTask(db, tid), followUp });
+      const task = await getTask(db, tid);
+      task.recurrence = (await loadWorkspace(db)).tasks[tid]?.recurrence || null;
+      return json({ task, followUp });
     }
     if (method === "DELETE") {
       const record = await getTask(db, tid);
