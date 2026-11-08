@@ -1,6 +1,12 @@
 # Cloudflare Free deployment handoff
 
-Prepared November 6, 2026 (PST). **Local adaptation and dry-run only. No resource was created, deployed, migrated remotely, or upgraded.** The Cloudflare connector is authenticated; deployment still needs the owner's explicit approval. Never enable a paid plan, usage-based add-on, or paid service to get past a limit.
+## Current live package
+
+Uploaded November 7, 2026, 7:57:46 PM Pacific. Deployment `97ad1b67-f257-4ffc-8cf4-9a0f0943bc61`, version `5c93bf48-e9de-4c8f-93a6-36bbe7930560`, rollout 100%. The downloaded script matches `deploy/cloudflare-upload/worker.js`: SHA-256 `da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72`, 469,790 bytes. The shell asset is `/assets/index-tVPtbvvR.js`. `GET /api/health` returned 200. Anonymous CRM APIs returned 401. `AUTH_PEPPER`, the plain-text settings, the D1 records, and the Free plan were left unchanged. `SETUP_TOKEN` is absent. The task already stored as due Nov 9 was not rewritten. Signed-in browser acceptance is still in progress. This is not a full live pass, and it is not a Free CPU or large-board measurement.
+
+Never enable a paid plan, usage-based add-on, or paid service to get past a limit. The November 6 notes below are the original handoff for how the package is built and uploaded. They are not a claim that the account is still empty.
+
+Prepared November 6, 2026 (PST), before this package was uploaded.
 
 ## Artifacts
 

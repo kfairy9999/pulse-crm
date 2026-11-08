@@ -6,7 +6,7 @@ The live site is [https://pulse-crm.kfairley9999.workers.dev](https://pulse-crm.
 
 The application code in this tree is covered by 40 Node tests and 36 Workers tests (76 total). GitHub Actions runs `npm test` on pushes and pull requests. That job builds the client and runs the same suites. It has no secrets and it does not deploy.
 
-`deploy/cloudflare-upload/worker.js` in this commit is 469,790 bytes, gzip 132,039, SHA-256 `da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72`. The shell loads `/assets/index-tVPtbvvR.js` and `/assets/index-YHj8ZfeU.css`. `metadata.json` is unchanged and still keeps `secret_text` and `secret_key`. The live Worker stays on the previous package, SHA-256 `966a8b816eedc4173ff77acf4c68101dd7f99962c8815845ae384787ba7789a5`, until that new file is uploaded. This repository change does not deploy it.
+`deploy/cloudflare-upload/worker.js` is the live script: 469,790 bytes, gzip 132,039, SHA-256 `da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72`. The shell loads `/assets/index-tVPtbvvR.js` and `/assets/index-YHj8ZfeU.css`. It was uploaded November 7, 2026, at 7:57:46 PM Pacific. Deployment `97ad1b67-f257-4ffc-8cf4-9a0f0943bc61`, version `5c93bf48-e9de-4c8f-93a6-36bbe7930560`, rollout 100%. The script downloaded from Cloudflare matches that hash. `GET /api/health` returned 200. Anonymous CRM APIs returned 401. `AUTH_PEPPER`, the plain-text settings, the stored records, and the Free plan were left unchanged. `SETUP_TOKEN` is absent. `metadata.json` still keeps `secret_text` and `secret_key`. Signed-in browser acceptance is still in progress, so this is not a full live pass. No Free CPU or large-board measurement is claimed.
 
 ## Screenshots
 
@@ -42,7 +42,7 @@ The pictures above are the fictional fixture, not the signed-in workspace.
 
 The owner calendar is America/Los_Angeles. “Due in days,” task Today / overdue, Reports due-today, and the Overview month buckets use that calendar day. A date typed on a task is stored as that `YYYY-MM-DD` and is not shifted. Weekly repeat adds seven calendar days to the stored date, so Nov 8 stays Nov 15. Appointment entry converts the browser’s wall clock to an absolute instant; the tests pin that browser to America/Los_Angeles. Upcoming appointments are compared as instants, which is the right check for “has this time passed.”
 
-A follow-up saved by the previous live package at 7:45 PM Pacific on Nov 7 was stored as Nov 9. This code does not rewrite that row. After the new package is uploaded, a new rule uses the Los Angeles day. The existing row can be edited in the task form.
+A follow-up saved by the previous package at 7:45 PM Pacific on Nov 7 is still stored as Nov 9. The upload did not rewrite that row. A new rule uses the Los Angeles day. The existing row can be edited in the task form.
 
 ## What it does
 
@@ -163,7 +163,7 @@ The calendar tests fix the clock: 7:45 PM and 7:47 PM Pacific on Nov 7, 2026 (`2
 
 ## How it was built
 
-This repository was developed with AI coding assistance in Cursor. Commits list both the repository owner and the coding agent. The owner operates the Cloudflare account and the private workspace. This README describes the software in the tree. It does not claim an unaided personal implementation, a security audit, a load test, or a Salesforce-equivalent product. The live site is owner sign-in only. The screenshots are synthetic. The corrected Worker package is in the repository and is not, by itself, a completed production deploy.
+This repository was developed with AI coding assistance in Cursor. Commits list both the repository owner and the coding agent. The owner operates the Cloudflare account and the private workspace. This README describes the software in the tree. It does not claim an unaided personal implementation, a security audit, a load test, or a Salesforce-equivalent product. The live site is owner sign-in only. The screenshots are synthetic. The package above is the script Cloudflare is serving. Signed-in browser acceptance is still in progress. That check, and any Free CPU or large-board measurement, is not claimed here.
 
 ## Source map
 

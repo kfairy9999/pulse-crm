@@ -1,5 +1,7 @@
 # Pulse CRM bundled Worker upload
 
+This exact `worker.js` is the live script. It was uploaded November 7, 2026, 7:57:46 PM Pacific, deployment `97ad1b67-f257-4ffc-8cf4-9a0f0943bc61`, version `5c93bf48-e9de-4c8f-93a6-36bbe7930560`, rollout 100%. The downloaded bytes match SHA-256 `da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72` (469,790 bytes). `GET /api/health` returned 200 and anonymous CRM APIs returned 401. `AUTH_PEPPER` is present and was not changed. `SETUP_TOKEN` is absent. Signed-in browser acceptance is still in progress. The steps below are the upload procedure, not a second deploy.
+
 Upload this directory through the sanctioned Cloudflare connector. Do not deploy with Wrangler, do not log in with the CLI, and do not call the Workers Assets upload session. That session returns a JWT that must be sent as `Authorization`, and `cloudflare.request` cannot set that header.
 
 The package is one Worker module. `worker.js` already contains the sign-in shell and the exact hashed `/assets/` allowlist (3 files). No separate asset parts are required.
@@ -44,6 +46,6 @@ Do not set `contentType` on the connector request. Do not add an `Authorization`
 
 ## After the upload
 
-Read the settings and secret names again. The D1 id and plain-text vars must be unchanged, and every secret name from step 4 must still be present. This upload does not create `AUTH_PEPPER` or `SETUP_TOKEN`. Until the provider stores `AUTH_PEPPER`, the Worker correctly returns 503 and does not serve the application. The user generates those secrets outside this package; do not invent them.
+Read the settings and secret names again. The D1 id and plain-text vars must be unchanged, and every secret name from step 4 must still be present. This upload does not create `AUTH_PEPPER` or `SETUP_TOKEN`. If `AUTH_PEPPER` is missing, the Worker returns 503 and does not serve the application. On the current live script that secret is already stored, health returns 200, and `SETUP_TOKEN` is absent. Do not invent or rotate either value.
 
 SHA-256: worker.js `da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72`, metadata.json `c9df1ef8f987c0ed071cbf96487c43ddde3aa0235204ed771e92d3e8b686f497`. Uncompressed worker `469790` bytes (gzip `132039`). The Free Worker size limit is 64 MiB uncompressed.
