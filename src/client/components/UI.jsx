@@ -2,7 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import { AlertCircle, Check, ChevronDown, Inbox, LoaderCircle, X, CheckSquare, Square } from 'lucide-react';
 import { initials } from '../api.js';
 
-const avatarColors = ['lavender', 'mint', 'peach', 'sky', 'rose'];
+const avatarColors = ['peach', 'mint', 'sand', 'sky', 'rose'];
 export function Avatar({ name, size = 'medium' }) {
   const sum = (name || '').split('').reduce((acc, letter) => acc + letter.charCodeAt(0), 0);
   return <span className={`avatar ${avatarColors[sum % avatarColors.length]} avatar-${size}`}>{initials(name)}</span>;
@@ -75,15 +75,15 @@ export function EmptyState({ title, description, action: Action, icon: Icon = In
 }
 
 export function ErrorState({ error, retry }) {
-  return <div className="state-card"><AlertCircle size={24} /><h3>We couldn’t load this view</h3><p>{error?.message || 'Check the server and try again.'}</p><Button onClick={() => retry()}>Try again</Button></div>;
+  return <div className="state-card" role="alert"><AlertCircle size={28} /><h3>This view didn’t open</h3><p>{error?.message || 'Something interrupted the load.'} Your records are still safe.</p><Button onClick={() => retry()}>Try again</Button></div>;
 }
 
-export function LoadingState({ label = 'Loading your workspace' }) {
-  return <div className="loading-state"><LoaderCircle className="spin" size={23} /><span>{label}…</span></div>;
+export function LoadingState({ label = 'Getting your workspace ready' }) {
+  return <div className="loading-state" role="status"><LoaderCircle className="spin" size={23} /><span>{label}…</span></div>;
 }
 
 export function ConfirmDialog({ title, description, confirmLabel = 'Delete', onConfirm, onClose, busy }) {
-  return <Modal title={title} eyebrow="Please confirm" onClose={onClose}><p className="confirm-description">{description}</p><div className="modal-actions"><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="danger" onClick={onConfirm} loading={busy}>{confirmLabel}</Button></div></Modal>;
+  return <Modal title={title} eyebrow="Please double-check" onClose={onClose}><p className="confirm-description">{description}</p><div className="modal-actions"><Button onClick={onClose} disabled={busy}>Keep it</Button><Button variant="danger" onClick={onConfirm} loading={busy}>{confirmLabel}</Button></div></Modal>;
 }
 
 export function Checkmark() { return <span className="success-check"><Check size={20} /></span>; }

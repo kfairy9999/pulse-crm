@@ -1,1 +1,19 @@
-.overlay{animation:fade-in .15s ease-out}.modal{animation:modal-in .17s ease-out}.toast{animation:toast-in .2s ease-out}@keyframes fade-in{from{opacity:0}to{opacity:1}}@keyframes modal-in{from{opacity:0;transform:translateY(9px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes toast-in{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}@media(prefers-reduced-motion:reduce){.overlay,.modal,.toast{animation:none}}
+.overlay { animation: fade-in .18s ease-out; }
+.modal { animation: modal-in .22s ease-out; }
+.toast { animation: toast-in .28s ease-out; }
+.page { animation: page-in .28s ease-out; }
+.task-checkbox.is-complete { animation: task-pop .32s ease; }
+.nav-item, .button, .deal-card, .metric-card, .summary-filter, .contact-card, .filter-chip {
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes task-pop { 0% { transform: scale(.86); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .modal, .toast, .page, .task-checkbox.is-complete { animation: none; }
+  .nav-item, .button, .deal-card, .metric-card, .summary-filter, .contact-card, .filter-chip { transition: none; }
+}

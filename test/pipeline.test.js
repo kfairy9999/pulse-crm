@@ -29,6 +29,19 @@ test('opportunities support CRUD, monetary totals, and all six curated stages', 
   assert.equal((await request('/opportunities', { expectedStatus: 200 })).payload.stages['New Lead'].length, 0);
 });
 
+test('local reports summarize stored deals and do not invent follow-up rules', async (t) => {
+  const { request, contact } = await createFixture(t);
+  const person = await contact({ company: 'Northstar Studio' });
+  await createDeal(request, person.id, 'Brand refresh', 'Proposal', 100);
+  const report = await request('/reports', { expectedStatus: 200 });
+  assert.equal(report.payload.stages.Proposal.deals, 1);
+  assert.equal(report.payload.stages.Proposal.value, 100);
+  assert.equal(report.payload.companies[0].company, 'Northstar Studio');
+  assert.match(report.payload.note, /Nothing is sent/);
+  assert.deepEqual((await request('/stage-rules', { expectedStatus: 200 })).payload.rules, []);
+  assert.deepEqual((await request('/views', { expectedStatus: 200 })).payload.views, []);
+});
+
 test('stage changes and card positions are transactional and preserve order', async (t) => {
   const { request, contact } = await createFixture(t);
   const person = await contact();

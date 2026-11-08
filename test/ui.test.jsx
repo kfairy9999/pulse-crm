@@ -6,6 +6,7 @@ import { DashboardView } from '../src/client/pages/Dashboard.jsx';
 import Inbox from '../src/client/pages/Inbox.jsx';
 import { ContactForm, OpportunityForm, TaskForm, AppointmentForm } from '../src/client/components/Forms.jsx';
 import { Workflows } from '../src/client/App.jsx';
+import { canEnterWorkspace } from '../src/client/AuthGate.jsx';
 import Pipeline, { openPipelineValue, weightedOpenValue } from '../src/client/pages/Pipeline.jsx';
 import Tasks from '../src/client/pages/Tasks.jsx';
 import Calendar from '../src/client/pages/Calendar.jsx';
@@ -100,6 +101,13 @@ test('task repeat shows weekly and an explicit does-not-repeat choice', () => {
   const off = renderToStaticMarkup(<TaskForm record={{ id: 't2', title: 'One time', status: 'Open', recurrence: null, priority: 'Medium' }} contacts={[]} onClose={() => {}} onSaved={() => {}} />);
   assert.match(off, /Saved repeat: Does not repeat/);
   assert.match(off, /value="none" selected/);
+});
+
+test('local mode opens the workspace and a signed-out worker still asks for sign-in', () => {
+  assert.equal(canEnterWorkspace({ authenticated: true, user: null, setupRequired: false }), true);
+  assert.equal(canEnterWorkspace({ authenticated: true, user: { id: 'owner' }, setupRequired: false }), true);
+  assert.equal(canEnterWorkspace({ authenticated: false, user: null, setupRequired: false }), false);
+  assert.equal(canEnterWorkspace({ authenticated: false, user: null, setupRequired: true }), false);
 });
 
 test('no contacts creates a genuine prerequisite for opportunities', () => {
