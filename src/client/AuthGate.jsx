@@ -3,11 +3,16 @@ import { LoaderCircle, ShieldCheck } from "lucide-react";
 import { api } from "./api.js";
 import { deriveCredential } from "../auth/password.js";
 
+export function canEnterWorkspace(session) {
+  return Boolean(session?.user || (session?.authenticated && !session?.setupRequired));
+}
+
 export default function AuthGate({ children }) {
   const [state, setState] = useState({
     loading: true,
     user: null,
     setup: false,
+    authenticated: false,
   });
   const [fields, setFields] = useState({
     email: "",
@@ -24,6 +29,7 @@ export default function AuthGate({ children }) {
         loading: false,
         user: result.user,
         setup: result.setupRequired,
+        authenticated: Boolean(result.authenticated || result.user),
         passwordProtocol: result.passwordProtocol || "legacy-scrypt",
       });
     } catch (err) {
@@ -32,6 +38,7 @@ export default function AuthGate({ children }) {
         loading: false,
         user: null,
         setup: false,
+        authenticated: false,
       }));
       setError(err.message);
     }
@@ -43,7 +50,7 @@ export default function AuthGate({ children }) {
     event.preventDefault();
     setError("");
     if (state.setup && fields.password !== fields.confirm)
-      return setError("Passwords do not match.");
+      return setError("Those two passwords don’t match yet. Please type them again.");
     setBusy(true);
     try {
       const legacy = state.passwordProtocol === "legacy-scrypt";
@@ -72,6 +79,7 @@ export default function AuthGate({ children }) {
         loading: false,
         user: result.user,
         setup: false,
+        authenticated: true,
       }));
     } catch (err) {
       setError(err.message);
@@ -89,10 +97,10 @@ export default function AuthGate({ children }) {
     return (
       <main className="auth-screen">
         <LoaderCircle className="spin" />
-        <p>Opening your secure workspace…</p>
+        <p>Opening your workspace…</p>
       </main>
     );
-  if (state.user)
+  if (canEnterWorkspace({ user: state.user, authenticated: state.authenticated, setupRequired: state.setup }))
     return children({
       owner: state.user,
       onLogout: async () => {
@@ -106,6 +114,7 @@ export default function AuthGate({ children }) {
           loading: false,
           user: null,
           setup: false,
+          authenticated: false,
         }));
       },
     });
@@ -126,8 +135,8 @@ export default function AuthGate({ children }) {
         <h1>{state.setup ? "Make this workspace yours." : "Welcome back."}</h1>
         <p>
           {state.setup
-            ? "Set your own email and a strong password. This is the only account registration."
-            : "Sign in to manage your contacts, pipeline, tasks, and schedule."}
+            ? "Choose the email and password only you will use. This is the one owner account."
+            : "Your people, pipeline, and follow-ups are right where you left them."}
         </p>
         <form onSubmit={submit}>
           {error && (

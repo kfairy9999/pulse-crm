@@ -52,7 +52,7 @@ export function ContactSelect({ contacts, defaultValue = '', required = false })
 
 export function OpportunityForm({ record, contacts, onClose, onSaved }) {
   const endpoint = record?.id ? `/opportunities/${record.id}` : '/opportunities';
-  if (!contacts.length) return <Modal title="A contact comes first" eyebrow="New opportunity" onClose={onClose}><p className="confirm-description">Every opportunity is linked to a contact. Add a contact before creating a deal.</p><div className="modal-actions"><Button onClick={onClose}>Cancel</Button></div></Modal>;
+  if (!contacts.length) return <Modal title="A contact comes first" eyebrow="New opportunity" onClose={onClose}><p className="confirm-description">Every opportunity is linked to a contact. Add a contact before creating a deal — a name is enough to start.</p><div className="modal-actions"><Button onClick={onClose}>Cancel</Button></div></Modal>;
   return <FormShell title={record?.id ? 'Edit opportunity' : 'Create an opportunity'} eyebrow="Revenue pipeline" record={record?.id ? record : null} endpoint={endpoint} onClose={onClose} onSaved={onSaved} submitLabel={record?.id ? 'Save opportunity' : 'Create opportunity'}>
     {(error) => <>
       <FormField label="Opportunity name" className="field-full"><input name="title" defaultValue={record?.title || ''} required maxLength={180} placeholder="e.g. Brand launch retainer" autoFocus /></FormField>

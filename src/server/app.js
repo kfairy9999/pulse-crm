@@ -343,6 +343,32 @@ export function createApp({ db, staticDir = DIST, auth = { enabled: false } } = 
     res.json({ deleted: appointment.id });
   }));
 
+  app.get('/api/reports', route((req, res) => {
+    const today = ownerCalendarDate();
+    const stages = db.prepare("SELECT stage, COUNT(*) AS deals, COALESCE(SUM(value_cents), 0) AS value_cents FROM opportunities GROUP BY stage").all();
+    const overdue = db.prepare("SELECT COUNT(*) AS count FROM tasks WHERE status = 'Open' AND due_date IS NOT NULL AND due_date < ?").get(today);
+    const dueToday = db.prepare("SELECT COUNT(*) AS count FROM tasks WHERE status = 'Open' AND due_date = ?").get(today);
+    const companies = db.prepare("SELECT COALESCE(NULLIF(TRIM(company), ''), '(No company)') AS company, COUNT(*) AS contacts FROM contacts GROUP BY 1 ORDER BY contacts DESC, company LIMIT 100").all();
+    const byStage = Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage, { deals: 0, value: 0 }]));
+    for (const row of stages) if (byStage[row.stage]) byStage[row.stage] = { deals: Number(row.deals), value: Number(row.value_cents) / 100 };
+    const won = byStage.Won;
+    const lost = byStage.Lost;
+    const closed = won.deals + lost.deals;
+    res.json({
+      generatedAt: now(),
+      stages: byStage,
+      won,
+      lost,
+      winRate: closed ? Math.round((won.deals / closed) * 100) : null,
+      overdueFollowUps: Number(overdue.count),
+      dueToday: Number(dueToday.count),
+      companies: companies.map((row) => ({ company: row.company, contacts: Number(row.contacts) })),
+      note: 'Totals come from records stored in this workspace. Nothing is sent or synced.',
+    });
+  }));
+  app.get('/api/stage-rules', (req, res) => res.json({ rules: [] }));
+  app.get('/api/views', (req, res) => res.json({ views: [] }));
+
   app.get('/api/inbox', route((req, res) => {
     const notes = db.prepare(`SELECT n.*, c.first_name, c.last_name, c.company, c.email, TRIM(c.first_name || ' ' || c.last_name) AS contact_name FROM contact_notes n JOIN contacts c ON c.id = n.contact_id ORDER BY n.created_at DESC`).all();
     res.json({ notes, mode: 'local-notes', externalConnections: [] });

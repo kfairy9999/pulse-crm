@@ -4,29 +4,35 @@ Pulse CRM is an independent, single-owner workspace for contacts, a sales pipeli
 
 The live site is [https://pulse-crm.kfairley9999.workers.dev](https://pulse-crm.kfairley9999.workers.dev). Sign-in is required. The workspace behind that sign-in is private. This repository does not include a demo account, owner credentials, a backup of live records, or customer data.
 
-The application code in this tree is covered by 40 Node tests and 36 Workers tests (76 total). GitHub Actions runs `npm test` on pushes and pull requests. That job builds the client and runs the same suites. It has no secrets and it does not deploy.
+The application code in this tree is covered by 42 Node tests and 36 Workers tests (78 total). GitHub Actions runs `npm test` on pushes and pull requests. That job builds the client and runs the same suites. It has no secrets and it does not deploy.
 
 `deploy/cloudflare-upload/worker.js` is the live script: 469,790 bytes, gzip 132,039, SHA-256 `da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72`. The shell loads `/assets/index-tVPtbvvR.js` and `/assets/index-YHj8ZfeU.css`. It was uploaded November 7, 2026, at 7:57:46 PM Pacific. Deployment `97ad1b67-f257-4ffc-8cf4-9a0f0943bc61`, version `5c93bf48-e9de-4c8f-93a6-36bbe7930560`, rollout 100%. The script downloaded from Cloudflare matches that hash. `GET /api/health` returned 200. Anonymous CRM APIs returned 401. `AUTH_PEPPER`, the plain-text settings, the stored records, and the Free plan were left unchanged. `SETUP_TOKEN` is absent. `metadata.json` still keeps `secret_text` and `secret_key`. Signed-in browser acceptance is still in progress, so this is not a full live pass. No Free CPU or large-board measurement is claimed.
 
 ## Screenshots
 
-These pictures are a **synthetic local fixture**. The people, companies, deals, tasks, and totals are fictional records served only to the browser for the screenshot. They are not the live workspace, not a production export, and not proof of a live phone pass. The dark bar on each image says so. The Overview also shows the product’s own “DEMO WORKSPACE” sample banner. The name in the sidebar is the workspace label baked into the client, not a customer record.
+These pictures are the redesigned client running against the **local sample database**. The people, companies, deals, tasks, and totals are fictional. They are not the live workspace, not a production export, and not a capture from a phone on the live site. The Overview shows the product’s own “DEMO WORKSPACE” sample banner. The name in the sidebar is the workspace label baked into the client, not a customer record. This change does not upload a new Worker; the package described above is still the script Cloudflare is serving.
 
-![Synthetic fixture: Overview with fictional sample records and the DEMO WORKSPACE banner. Not the live workspace.](docs/screenshots/synthetic-overview.png)
+The visual language is a warm studio: cream paper, an espresso sidebar, and terracotta actions. Headings are Fraunces and the interface is Source Sans 3, both served from this app so they load under the Worker’s font policy. Initials sit on clay, sage, honey, and blush. Empty states say what to do next, and saving or completing something confirms with a short toast.
 
-![Synthetic fixture: six-stage pipeline with fictional deals. Not the live workspace.](docs/screenshots/synthetic-pipeline.png)
+![Local sample: Overview, with the greeting, terracotta chart, and DEMO WORKSPACE banner. Not the live workspace.](docs/screenshots/overview-desktop.png)
 
-![Synthetic fixture: contact list with Preview backup, CSV, and Import. Not the live workspace.](docs/screenshots/synthetic-contacts.png)
+![Local sample: six-stage pipeline. Not the live workspace.](docs/screenshots/pipeline-desktop.png)
 
-![Synthetic fixture: tasks showing Repeats weekly and Does not repeat. Not the live workspace.](docs/screenshots/synthetic-tasks.png)
+![Local sample: contact list. Not the live workspace.](docs/screenshots/contacts-desktop.png)
 
-![Synthetic fixture: reports and a paused local follow-up rule. Not the live workspace.](docs/screenshots/synthetic-reports.png)
+![Local sample: tasks, with the repeat choice separated from the title. Not the live workspace.](docs/screenshots/tasks-desktop.png)
 
-![Synthetic fixture: pipeline at 390px width, with the menu button and horizontally scrolling stages. Not a live phone capture.](docs/screenshots/synthetic-pipeline-phone.png)
+![Local sample: reports totaled from the sample records. Not the live workspace.](docs/screenshots/reports-desktop.png)
 
-![Synthetic fixture: pipeline at 360px width. Not a live phone capture.](docs/screenshots/synthetic-pipeline-360.png)
+![Local sample: local notes. Not the live workspace.](docs/screenshots/inbox-desktop.png)
 
-![Synthetic fixture: contacts at 360px width. The table scrolls sideways. Not a live phone capture.](docs/screenshots/synthetic-contacts-360.png)
+![Local sample: Overview at 390px width. Not a live phone capture.](docs/screenshots/overview-phone.png)
+
+![Local sample: pipeline at 390px width. Stages swipe sideways. Not a live phone capture.](docs/screenshots/pipeline-phone.png)
+
+![Local sample: contacts at 390px width, as cards. Not a live phone capture.](docs/screenshots/contacts-phone.png)
+
+![Local sample: schedule at 390px width. Not a live phone capture.](docs/screenshots/schedule-phone.png)
 
 ## A short tour
 
@@ -115,7 +121,7 @@ Local secrets are placeholders in `.dev.vars.example`. Copy that file to `.dev.v
 
 ## Phone layout
 
-Below 760px the sidebar is off-canvas and opens from the menu button. Below 520px the page padding, type, and action row tighten. The stage report is a stacked list, so the deal count and value stay on the screen. Pipeline columns and the contact table scroll sideways at 360px; the 360px contact picture shows that scroll rather than a layout that hides the company. The 360px and 390px pictures are that fixture in a desktop browser viewport. They are not captures from a phone on the live site.
+Below 760px the sidebar is off-canvas and opens from the menu button. Body type stays readable, and icon controls grow to a 44px tap target. Contacts become cards, so the name, company, and deal count stay on the screen instead of a sideways table. Pipeline stages still scroll sideways, one column at a time, with a short swipe hint. The stage report stacks so the deal count and value stay visible. The phone pictures are that fixture in a 390px browser viewport. They are not captures from a phone on the live site.
 
 ## Local setup
 
@@ -145,7 +151,7 @@ Open `https://127.0.0.1:8787/signin`, accept the local certificate, and create a
 ## Tests
 
 ```bash
-npm test                 # build, 40 Node tests, then 36 workerd/D1 tests
+npm test                 # build, 42 Node tests, then 36 workerd/D1 tests
 npm run test:legacy      # Node tests only; run npm run build first so the bundle render test can read dist/
 npm run test:worker      # build, then the workerd suite
 npm run test:smoke       # local Wrangler HTTP checks, static-assets mode

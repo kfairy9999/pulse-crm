@@ -40,10 +40,11 @@ export default function Pipeline({ openForm, notify, revision, contacts, initial
     finally { setMoving(null); setDragId(null); setDragOver(null); }
   };
   return <div className="page pipeline-page">
-    <div className="page-heading"><div><span className="eyebrow">Turn conversations into momentum</span><h1>Pipeline<span className="count-badge">{data?.total ?? '—'}</span></h1><p>Every opportunity has a next step.</p></div><Button variant="primary" icon={Plus} onClick={() => openForm('opportunity', () => reload(true))}>New opportunity</Button></div>
+    <div className="page-heading"><div><span className="eyebrow">Turn conversations into momentum</span><h1>Pipeline<span className="count-badge">{data?.total ?? '—'}</span></h1><p>Move a conversation forward when you’re ready. Drag a card, or use its stage menu.</p></div><Button variant="primary" icon={Plus} onClick={() => openForm('opportunity', () => reload(true))}>New opportunity</Button></div>
     <div className="pipeline-search"><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter this pipeline…" aria-label="Filter opportunities" /></div>
     {loading ? <LoadingState label="Laying out your pipeline" /> : error || !data?.stages ? <ErrorState error={error || { message: 'The pipeline response was incomplete.' }} retry={reload} /> : <>
       <div className="pipeline-summary"><div><span className="summary-icon blue"><CircleDollarSign size={18} /></span><span><small>Open value</small><strong>{money(openPipelineValue(data.stages))}</strong></span></div><div><span className="summary-icon purple"><TrendingUp size={18} /></span><span><small>Weighted forecast</small><strong>{money(weightedOpenValue(data.stages))}</strong></span></div><div><span className="summary-icon green"><Trophy size={18} /></span><span><small>Won</small><strong>{money(stageRows(data.stages, 'Won').reduce((total, deal) => total + (Number(deal?.value) || 0), 0))}</strong></span></div><div className="pipeline-instruction"><GripVertical size={17} /><span>Drag cards between stages, or use the stage menu on any card.</span></div></div>
+      <p className="pipeline-swipe-hint">Swipe sideways to see every stage.</p>
       <div className="pipeline-board" aria-label="Opportunity pipeline">{PIPELINE_STAGES.map((stage) => {
         const deals = stageRows(data.stages, stage).filter((deal) => `${deal?.title || ''} ${deal?.contact_name || ''} ${deal?.company || ''}`.toLowerCase().includes(query.toLowerCase()));
         return <section className={`pipeline-column stage-${stageTone[stage]} ${dragOver === stage ? 'drag-over' : ''}`} key={stage} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDragOver(stage); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDragOver(null); }} onDrop={(event) => { event.preventDefault(); const id = event.dataTransfer.getData('text/plain') || dragId; if (id) move(id, stage); }}>
@@ -56,7 +57,7 @@ export default function Pipeline({ openForm, notify, revision, contacts, initial
             <div className="deal-metadata">{deal.expected_close_date ? <span><CalendarDays size={13} />{plainDate(deal.expected_close_date)}</span> : <span>No close date</span>}{deal.notes && <span title={deal.notes}>Has notes</span>}</div>
             <div className="deal-card-footer"><Select aria-label={`Stage for ${deal.title}`} value={deal.stage} disabled={moving === deal.id} onChange={(event) => move(deal.id, event.target.value)}>{PIPELINE_STAGES.map((name) => <option key={name}>{name}</option>)}</Select><IconButton label={`Delete ${deal.title}`} className="danger-icon" onClick={() => setDeleting(deal)}><Trash2 size={14} /></IconButton></div>
           </article>)}</div>
-          {!deals.length && <div className="empty-column"><BriefcaseBusiness size={20} /><span>{query ? 'No matching deals' : 'Ready for your next opportunity'}</span></div>}
+          {!deals.length && <div className="empty-column"><BriefcaseBusiness size={20} /><span>{query ? 'Nothing matches that filter' : 'This stage is open'}</span></div>}
           <button className="add-deal-to-stage" onClick={() => openForm('opportunity', () => reload(true), { stage })}><Plus size={14} />Add opportunity</button>
         </section>;
       })}</div>
