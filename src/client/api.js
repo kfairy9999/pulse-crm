@@ -16,7 +16,16 @@ export async function downloadText(filename, text) {
   URL.revokeObjectURL(url);
 }
 
+/** The public demo lives at /demo and never talks to the real API. */
+export const isDemo = () => typeof window !== 'undefined' && window.location.pathname === '/demo';
+
 export async function api(path, options = {}) {
+  if (isDemo()) {
+    const { demoApi } = await import('./demo/demoApi.js');
+    const { status, body } = await demoApi(path, options);
+    if (status >= 400) throw new ApiError(body.error || `Request failed (${status}).`, status, body.fields);
+    return body;
+  }
   const csrf = document.cookie.split('; ').find((cookie) => cookie.startsWith('__Host-pulse_csrf='))?.split('=').slice(1).join('=');
   const response = await fetch(`/api${path}`, {
     ...options,

@@ -474,6 +474,15 @@ describe("D1 CRM CRUD and pipeline ordering", () => {
   });
 });
 describe("Workers deployment and security contracts", () => {
+  it("serves the public demo shell without a session and without customer data", async () => {
+    const demo = await worker.fetch(new Request("https://pulse.test/demo"), env);
+    expect(demo.status).toBe(200);
+    expect(demo.headers.get("Content-Security-Policy")).toContain("script-src 'self'");
+    const shell = await demo.text();
+    expect(shell).toContain('id="root"');
+    expect(shell).not.toContain("owner@example.test");
+    expect((await worker.fetch(new Request("https://pulse.test/api/contacts"), env)).status).toBe(401);
+  });
   it("serves only the public sign-in shell and assets before login; unknown routes stay 404", async () => {
     const raw = (path) =>
       worker.fetch(new Request(`https://pulse.test${path}`), env);

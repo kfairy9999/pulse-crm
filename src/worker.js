@@ -145,6 +145,14 @@ export default {
       // HTML and any unknown resource never become a public unauthenticated SPA fallback.
       if (request.method !== "GET" && request.method !== "HEAD")
         throw new DomainError("API route not found.", 404);
+      // The public demo shell: the same client code, but every API call is answered in the
+      // browser by src/client/demo with fictional data. It never reads the session or the DB.
+      if (path === "/demo") {
+        const demo = await fetchAsset(request, env, "/index.html", bundledAssets, "GET");
+        if (!demo.ok)
+          throw new DomainError("Build the React client with npm run build before serving the Worker.", 503);
+        return secureResponse(demo, false, request);
+      }
       const session = await getSession(scoped.DB, request);
       if (path === "/signin" && session)
         return secureResponse(

@@ -886,3 +886,16 @@ h1 { font-size: 36px; line-height: 1.15; color: var(--ink); display: flex; align
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Public demo */
+.demo-banner { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: var(--honey-soft); color: var(--honey); border-bottom: 1px solid #ecd9b0; font-size: 14px; line-height: 1.45; }
+.demo-banner svg { flex: none; }
+.demo-banner span { flex: 1; }
+.demo-banner strong { color: #5f400b; }
+.demo-banner a { color: var(--primary); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.auth-demo-link { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--primary-soft); color: var(--ink); text-decoration: none; font-size: 14px; line-height: 1.5; transition: border-color .15s ease, background .15s ease; }
+.auth-demo-link strong { display: block; color: var(--primary); font-size: 15px; }
+.auth-demo-link:hover { border-color: var(--line-strong); background: #f4e1d5; }
+.auth-demo-link:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.auth-demo-link > span:last-child { font-size: 20px; color: var(--primary); }
+@media (max-width: 720px) { .demo-banner { padding: 9px 12px; font-size: 13px; } }

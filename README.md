@@ -2,15 +2,19 @@
 
 Pulse CRM is an independent, single-owner workspace for contacts, a sales pipeline, follow-ups, and appointments. It exists so one person can keep that work in one private place without a paid multi-user CRM subscription and without connecting email, calendars, or other accounts.
 
-The live site is [https://pulse-crm.kfairley9999.workers.dev](https://pulse-crm.kfairley9999.workers.dev). Sign-in is required. The workspace behind that sign-in is private. This repository does not include a demo account, owner credentials, a backup of live records, or customer data.
+**Live demo:** [pulse-crm.kfairley9999.workers.dev/demo](https://pulse-crm.kfairley9999.workers.dev/demo). No sign-in. The demo runs the same request handlers as the real Worker (`src/crm.js`) against an in-memory SQLite database in your browser (sql.js, asm.js build), seeded with fictional people and deals whose dates move with today. You can add, edit, drag, and complete things; nothing is sent to the server, and a reload starts over. A banner on every page says it is a demo.
 
-The application code in this tree is covered by 42 Node tests and 36 Workers tests (78 total). GitHub Actions runs `npm test` on pushes and pull requests. That job builds the client and runs the same suites. It has no secrets and it does not deploy.
+The real workspace at [pulse-crm.kfairley9999.workers.dev](https://pulse-crm.kfairley9999.workers.dev) still requires the owner's sign-in. `/demo` never reads the session or the D1 database, and the CRM APIs still return 401 without a session; a Workers test checks both.
 
-`deploy/cloudflare-upload/worker.js` is the live script: 469,790 bytes, gzip 132,039, SHA-256 `da4def941eb1ba9963c16b9ac18303dbc09736e60fbcf9ac03c8903324e06e72`. The shell loads `/assets/index-tVPtbvvR.js` and `/assets/index-YHj8ZfeU.css`. It was uploaded November 7, 2026, at 7:57:46 PM Pacific. Deployment `97ad1b67-f257-4ffc-8cf4-9a0f0943bc61`, version `5c93bf48-e9de-4c8f-93a6-36bbe7930560`, rollout 100%. The script downloaded from Cloudflare matches that hash. `GET /api/health` returned 200. Anonymous CRM APIs returned 401. `AUTH_PEPPER`, the plain-text settings, the stored records, and the Free plan were left unchanged. `SETUP_TOKEN` is absent. `metadata.json` still keeps `secret_text` and `secret_key`. Signed-in browser acceptance is still in progress, so this is not a full live pass. No Free CPU or large-board measurement is claimed.
+The application code in this tree is covered by 45 Node tests and 37 Workers tests (82 total). Three of the Node tests run the demo database through the real CRM handlers, including a duplicate-email write that must fail with 409. GitHub Actions runs `npm test` on pushes and pull requests. That job builds the client and runs the same suites. It has no secrets and it does not deploy.
+
+`deploy/cloudflare-upload/worker.js` is the live script: 2,018,185 bytes, gzip 721,959, SHA-256 `4f6aa4f438d9ff266ff56bc9932c7df397e075225727972a45f516d29564d659`. It is bigger than before because the lazily loaded demo chunk includes SQLite compiled to JavaScript; the signed-in app does not download it. It was uploaded November 10, 2026, through the Cloudflare API with `keep_bindings` for secrets, so `AUTH_PEPPER`, the D1 binding, the plain-text settings, and the stored records were left unchanged. After the upload, `GET /api/health` returned 200 and anonymous CRM APIs returned 401. No Free-plan CPU or large-board measurement is claimed.
+
+![The live demo on a desktop: Overview with the demo banner, open pipeline, and priority tasks. Fictional sample data.](docs/screenshots/demo-overview-desktop.png)
 
 ## Screenshots
 
-These pictures are the redesigned client running against the **local sample database**. The people, companies, deals, tasks, and totals are fictional. They are not the live workspace, not a production export, and not a capture from a phone on the live site. The Overview shows the product’s own “DEMO WORKSPACE” sample banner. The name in the sidebar is the workspace label baked into the client, not a customer record. This change does not upload a new Worker; the package described above is still the script Cloudflare is serving.
+These pictures are the redesigned client running against the **local sample database**. The people, companies, deals, tasks, and totals are fictional. They are not the live workspace, not a production export, and not a capture from a phone on the live site. The Overview shows the product’s own “DEMO WORKSPACE” sample banner. The name in the sidebar is the workspace label baked into the client, not a customer record.
 
 The visual language is a warm studio: cream paper, an espresso sidebar, and terracotta actions. Headings are Fraunces and the interface is Source Sans 3, both served from this app so they load under the Worker’s font policy. Initials sit on clay, sage, honey, and blush. Empty states say what to do next, and saving or completing something confirms with a short toast.
 
@@ -151,7 +155,7 @@ Open `https://127.0.0.1:8787/signin`, accept the local certificate, and create a
 ## Tests
 
 ```bash
-npm test                 # build, 42 Node tests, then 36 workerd/D1 tests
+npm test                 # build, 45 Node tests, then 37 workerd/D1 tests
 npm run test:legacy      # Node tests only; run npm run build first so the bundle render test can read dist/
 npm run test:worker      # build, then the workerd suite
 npm run test:smoke       # local Wrangler HTTP checks, static-assets mode
