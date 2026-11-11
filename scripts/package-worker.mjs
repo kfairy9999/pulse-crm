@@ -18,7 +18,7 @@ import {
 const root = process.cwd();
 const dryRunDir = path.join(root, ".wrangler", "bundle-dry-run");
 const packageDir = path.join(root, "deploy", "cloudflare-upload");
-const artifactDir = "/opt/cursor/artifacts/pulse-crm-worker-package";
+const artifactDir = process.env.PULSE_ARTIFACT_DIR || path.join(root, ".wrangler", "worker-package-artifacts");
 const origin = "https://pulse-crm.kfairley9999.workers.dev";
 const accountId = "f0d8472cc77b71cb083b6b9824e909c3";
 const databaseId = "7b391a6a-415e-4ad9-ae5d-eeaff7b3ded3";
@@ -263,7 +263,7 @@ if (migrated.status !== 0) {
   await rm(testConfig, { force: true });
   throw new Error("Local package D1 migration failed.");
 }
-const port = "8791";
+const port = process.env.PULSE_PACKAGE_PORT || "8791";
 const localOrigin = `http://127.0.0.1:${port}`;
 const child = spawn(
   process.execPath,

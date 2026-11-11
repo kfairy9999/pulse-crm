@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { LoaderCircle, ShieldCheck } from "lucide-react";
-import { api } from "./api.js";
+import { api, isDemo } from "./api.js";
 import { deriveCredential } from "../auth/password.js";
 
 export function canEnterWorkspace(session) {
@@ -104,6 +104,10 @@ export default function AuthGate({ children }) {
     return children({
       owner: state.user,
       onLogout: async () => {
+        if (isDemo()) {
+          window.location.assign("/signin");
+          return;
+        }
         try {
           await api("/auth/logout", { method: "POST" });
         } catch {
@@ -242,6 +246,14 @@ export default function AuthGate({ children }) {
             verification.
           </span>
         </div>
+        <a className="auth-demo-link" href="/demo">
+          <span>
+            <strong>Just looking around?</strong>
+            Open the demo with sample data. It runs in your browser and
+            never touches this workspace.
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
       </section>
     </main>
   );
