@@ -271,6 +271,7 @@ export async function applyStageRules(db, opportunity) {
   const workspace = await loadWorkspace(db);
   const rules = workspace.rules.filter((rule) => rule.enabled !== false && rule.stage === opportunity.stage);
   let created = 0;
+  const taskIds = [];
   for (const rule of rules) {
     const key = `${rule.id}:${opportunity.id}`;
     if (workspace.spawned[key]) continue;
@@ -294,10 +295,11 @@ export async function applyStageRules(db, opportunity) {
       statement(db, insertSQL("activities", event), ...Object.values(event)),
     ]);
     workspace.spawned[key] = taskId;
+    taskIds.push(taskId);
     created += 1;
   }
   if (created) await saveWorkspace(db, workspace);
-  return created;
+  return { created, taskIds };
 }
 
 function cleanRule(body) {

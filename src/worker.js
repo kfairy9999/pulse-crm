@@ -1,5 +1,6 @@
 import { DomainError } from "./shared.js";
 import { handleCrm } from "./crm.js";
+import { handleExternalSearch } from "./search.js";
 import { handleAuth } from "./auth/worker.js";
 import { authPepper } from "./auth/password.js";
 import { checkMigrated } from "./d1.js";
@@ -88,6 +89,16 @@ export default {
             true,
             request,
           );
+        if (path === "/api/v1/search") {
+          if (request.method !== "POST")
+            throw new DomainError("Method not allowed.", 405);
+          needJson(request);
+          return secureResponse(
+            await handleExternalSearch(request, scoped, await readJson(request, 16 * 1024)),
+            true,
+            request,
+          );
+        }
         if (request.method !== "GET" && request.method !== "HEAD") {
           if (!sameOrigin(request))
             throw new DomainError("Request origin is not allowed.", 403);
@@ -131,6 +142,7 @@ export default {
             path,
             body,
             url,
+            actor: session.user_id,
           }),
           true,
           request,

@@ -5,3 +5,13 @@ AUTH_PEPPER=REPLACE_WITH_LOCAL_RANDOM_32_BYTE_BASE64URL
 SETUP_TOKEN=REPLACE_WITH_SEPARATE_LOCAL_RANDOM_32_BYTE_BASE64URL
 AUTH_PEPPER_ID=local-development-v1
 APP_ORIGIN=https://127.0.0.1:8787
+
+# Optional search. Leave these unset for keyword search. Never commit real values.
+# QDRANT_URL is the HTTPS origin of your Qdrant cluster, for example
+# https://example.region.cloud.qdrant.io:6333
+# QDRANT_URL=
+# QDRANT_API_KEY=
+# GEMINI_API_KEY=
+# SEARCH_API_TOKEN= is a separate random string of at least 32 characters.
+# Other apps send it as Authorization: Bearer. It is not a Qdrant key.
+# SEARCH_API_TOKEN=
