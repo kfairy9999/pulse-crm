@@ -79,7 +79,7 @@ npx wrangler secret put GEMINI_API_KEY
 npx wrangler secret put SEARCH_API_TOKEN
 ```
 
-`QDRANT_URL` is the cluster origin only, such as `https://example.region.cloud.qdrant.io:6333`. `http://` is accepted only for `localhost` or `127.0.0.1`. `GEMINI_API_KEY` is a Google AI Studio key for the Gemini API. The Worker calls `gemini-embedding-2` with `output_dimensionality` 768. `SEARCH_API_TOKEN` is a separate random string of at least 32 characters. Generate it the same way as the local pepper and do not reuse the Qdrant key, the Gemini key, or `AUTH_PEPPER`.
+`QDRANT_URL` is the cluster origin only, such as `https://example.region.cloud.qdrant.io:6333`. `http://` is accepted only for `localhost` or `127.0.0.1`. `GEMINI_API_KEY` is a Google AI Studio key for the Gemini API. The Worker calls `gemini-embedding-2` with `outputDimensionality` set to 768. `SEARCH_API_TOKEN` is a separate random string of at least 32 characters. Generate it the same way as the local pepper and do not reuse the Qdrant key, the Gemini key, or `AUTH_PEPPER`.
 
 Local Wrangler reads the same names from `.dev.vars`, which Git ignores. The names are commented in `.dev.vars.example`. Leave them unset to stay on keyword search.
 

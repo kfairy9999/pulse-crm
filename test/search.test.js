@@ -125,8 +125,8 @@ test("search configuration requires https Qdrant, both keys, and a long API toke
   assert.equal(qdrantOrigin("https://user:pass@qdrant.test"), null);
   assert.equal(qdrantOrigin("http://127.0.0.1:6333"), "http://127.0.0.1:6333");
   const embed = embedRequestBody("kiln", "RETRIEVAL_QUERY");
-  assert.equal(embed.output_dimensionality, 768);
-  assert.equal(embed.task_type, "RETRIEVAL_QUERY");
+  assert.equal(embed.outputDimensionality, 768);
+  assert.equal(embed.taskType, "RETRIEVAL_QUERY");
   assert.equal(EMBEDDING_MODEL, "gemini-embedding-2");
   assert.match(EMBED_URL, /gemini-embedding-2:embedContent$/);
 });
@@ -227,7 +227,8 @@ test("hybrid search keeps Qdrant filters and discards a leaked point", async () 
   assert.equal(query.headers["api-key"], KEYS.QDRANT_API_KEY);
   const embed = remote.calls.find((call) => call.href === EMBED_URL);
   assert.equal(embed.headers["x-goog-api-key"], KEYS.GEMINI_API_KEY);
-  assert.equal(embed.body.task_type, "RETRIEVAL_QUERY");
+  assert.equal(embed.body.taskType, "RETRIEVAL_QUERY");
+  assert.equal(embed.body.outputDimensionality, 768);
   assert.equal(embed.href.includes(KEYS.GEMINI_API_KEY), false);
 });
 
@@ -264,7 +265,8 @@ test("writes upsert and delete Qdrant points when keys exist, and skip the netwo
   assert.equal(JSON.stringify(upsert.body).includes(KEYS.GEMINI_API_KEY), false);
   const embed = remote.calls.find((call) => call.href === EMBED_URL);
   assert.match(embed.body.content.parts[0].text, /Rae Lopez/);
-  assert.equal(embed.body.task_type, "RETRIEVAL_DOCUMENT");
+  assert.equal(embed.body.taskType, "RETRIEVAL_DOCUMENT");
+  assert.equal(embed.body.outputDimensionality, 768);
   const renamed = await call(db, "PATCH", `/api/contacts/${created.body.contact.id}`, { first_name: "Rae", last_name: "Atelier" }, env);
   assert.equal(renamed.status, 200);
   const again = remote.calls.filter((call) => call.href === EMBED_URL).at(-1);

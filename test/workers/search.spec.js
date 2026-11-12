@@ -98,7 +98,7 @@ describe("search API", () => {
     expect(upserts[0].body.points[0].payload).toMatchObject({ recordType: "contact", contactId: ava.body.contact.id, schemaVersion: 1 });
     expect(upserts[0].body.points[0].vector.dense).toHaveLength(DENSE_SIZE);
     expect(upserts[0].headers["api-key"]).toBe(KEYS.QDRANT_API_KEY);
-    expect(calls.some((call) => call.href === EMBED_URL && call.body.task_type === "RETRIEVAL_DOCUMENT" && call.headers["x-goog-api-key"] === KEYS.GEMINI_API_KEY)).toBe(true);
+    expect(calls.some((call) => call.href === EMBED_URL && call.body.taskType === "RETRIEVAL_DOCUMENT" && call.body.outputDimensionality === 768 && call.headers["x-goog-api-key"] === KEYS.GEMINI_API_KEY)).toBe(true);
     expect(calls.some((call) => call.href.includes("key="))).toBe(false);
     const patched = await request(`/api/contacts/${ava.body.contact.id}`, { method: "PATCH", headers: auth, body: JSON.stringify({ company: "Kiln Atelier" }) }, runtime);
     expect(patched.status).toBe(200);

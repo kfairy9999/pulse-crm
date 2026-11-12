@@ -397,8 +397,8 @@ export function hybridRequest(filters, dense, sparse) {
 export function embedRequestBody(text, task) {
   return {
     content: { parts: [{ text: String(text || "").slice(0, 6000) }] },
-    task_type: task,
-    output_dimensionality: DENSE_SIZE,
+    taskType: task,
+    outputDimensionality: DENSE_SIZE,
   };
 }
 
