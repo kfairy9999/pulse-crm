@@ -7,6 +7,7 @@ import Inbox from '../src/client/pages/Inbox.jsx';
 import { ContactForm, OpportunityForm, TaskForm, AppointmentForm } from '../src/client/components/Forms.jsx';
 import { Workflows } from '../src/client/App.jsx';
 import { canEnterWorkspace } from '../src/client/AuthGate.jsx';
+import { SearchView } from '../src/client/pages/Search.jsx';
 import Pipeline, { openPipelineValue, weightedOpenValue } from '../src/client/pages/Pipeline.jsx';
 import Tasks from '../src/client/pages/Tasks.jsx';
 import Calendar from '../src/client/pages/Calendar.jsx';
@@ -108,6 +109,27 @@ test('local mode opens the workspace and a signed-out worker still asks for sign
   assert.equal(canEnterWorkspace({ authenticated: true, user: { id: 'owner' }, setupRequired: false }), true);
   assert.equal(canEnterWorkspace({ authenticated: false, user: null, setupRequired: false }), false);
   assert.equal(canEnterWorkspace({ authenticated: false, user: null, setupRequired: true }), false);
+});
+
+const searchFilters = { type: '', contactId: '', dealId: '', stage: '', from: '', to: '' };
+
+test('search tells a recruiter when results are keywords and when they are hybrid', () => {
+  const handlers = { onQuery() {}, onFilter() {}, onSubmit() {}, onOpen() {} };
+  const keyword = renderToStaticMarkup(<SearchView query="kiln" filters={searchFilters} status={{ mode: 'keyword', label: 'Keyword search. Qdrant is not configured, so these matches are text in this workspace, not semantic or vector results.' }} {...handlers} />);
+  assert.match(keyword, /Keyword search/);
+  assert.match(keyword, /not semantic or vector results/);
+  assert.match(keyword, /KEYWORD/);
+  assert.doesNotMatch(keyword, /gemini-embedding-2/);
+  const demo = renderToStaticMarkup(<SearchView demo query="kiln" filters={searchFilters} status={{ mode: 'hybrid', label: 'Hybrid search. Dense vectors are Gemini gemini-embedding-2 at 768 dimensions.' }} response={{ mode: 'hybrid', results: [] }} {...handlers} />);
+  assert.match(demo, /does not call Qdrant or Gemini/);
+  assert.match(demo, /not model results/);
+  assert.match(demo, /KEYWORD/);
+  assert.doesNotMatch(demo, /HYBRID/);
+  const hybrid = renderToStaticMarkup(<SearchView query="kiln" filters={searchFilters} status={{ mode: 'hybrid' }} response={{ mode: 'hybrid', label: 'Hybrid search. Dense vectors are Gemini gemini-embedding-2 at 768 dimensions. Keyword vectors are hashed term weights from this Worker.', results: [{ recordType: 'note', recordId: 'n1', title: 'Note · Ava', snippet: 'The kiln proposal', date: '2026-11-12T12:00:00.000Z', stage: null }] }} {...handlers} />);
+  assert.match(hybrid, /Hybrid search/);
+  assert.match(hybrid, /gemini-embedding-2/);
+  assert.match(hybrid, /HYBRID/);
+  assert.match(hybrid, /The kiln proposal/);
 });
 
 test('no contacts creates a genuine prerequisite for opportunities', () => {

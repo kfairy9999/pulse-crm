@@ -66,6 +66,7 @@ import {
   deleteContactStatements,
   guardedWrite,
 } from "./pipeline.js";
+import { handleReindex, handleSessionSearch, searchStatus, syncSearchIndex } from "./search.js";
 
 const expectBody = (body) => {
   if (!body || typeof body !== "object" || Array.isArray(body))
@@ -101,6 +102,10 @@ const deleteBatch = (db, table, record, event) =>
     statement(db, `DELETE FROM ${table} WHERE id=?`, record.id),
     activityInsert(db, event),
   ]);
+async function indexed(env, db, response, change) {
+  if (change) await syncSearchIndex(env, db, change);
+  return response;
+}
 
 async function contactInput(db, body, previous = null) {
   expectBody(body);
@@ -227,8 +232,11 @@ function dashboardResult(
     recentContacts: recent.map(mapContact),
   };
 }
-export async function handleCrm(request, env, { method, path, body, url }) {
+export async function handleCrm(request, env, { method, path, body, url, actor }) {
   const db = env.DB;
+  if (method === "GET" && path === "/api/search/status") return json(searchStatus(env));
+  if (method === "GET" && path === "/api/search") return handleSessionSearch(env, db, url, actor);
+  if (method === "POST" && path === "/api/search/reindex") return handleReindex(env, db, body, actor);
   if (method === "GET" && path === "/api/export") return json(await buildExport(db));
   if (method === "GET" && path === "/api/contacts.csv") {
     const contacts = await all(db, `${contactSelect} ORDER BY LOWER(c.first_name) LIMIT 2000`);
@@ -236,8 +244,12 @@ export async function handleCrm(request, env, { method, path, body, url }) {
   }
   if (method === "POST" && path === "/api/import/preview")
     return json(previewImport(body?.csv, await existingEmails(db), body?.mapping));
-  if (method === "POST" && path === "/api/import/contacts")
-    return json(await commitImport(db, body?.csv, body?.mapping), 201);
+  if (method === "POST" && path === "/api/import/contacts") {
+    const imported = await commitImport(db, body?.csv, body?.mapping);
+    return indexed(env, db, json(imported, 201), {
+      upsert: imported.contacts.map((row) => ({ type: "contact", id: row.id })),
+    });
+  }
   if (method === "POST" && path === "/api/export/preview")
     return json(assertBackupPreview(body?.backup || body));
   if (method === "GET" && path === "/api/reports") return json(await buildReport(db));
@@ -385,7 +397,10 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         { ...input, updated_at: now() },
         activity("contact", `Updated ${fullContactName(input)}'s contact`, cid),
       );
-      return json({ contact: await getContact(db, cid) });
+      return indexed(env, db, json({ contact: await getContact(db, cid) }), {
+        upsert: [{ type: "contact", id: cid }],
+        upsertContactNotes: cid,
+      });
     }
     if (method === "DELETE") {
       const rows = await readBoard(db),
@@ -402,12 +417,23 @@ export async function handleCrm(request, env, { method, path, body, url }) {
           `This contact has ${deals} ${deals === 1 ? "opportunity" : "opportunities"}. Delete or reassign ${deals === 1 ? "it" : "them"} first.`,
           409,
         );
+      const tasks = await all(db, "SELECT id FROM tasks WHERE contact_id=?", cid);
+      const appointments = await all(db, "SELECT id FROM appointments WHERE contact_id=?", cid);
       await guardedWrite(
         db,
         (key) => deleteContactStatements(db, cid, key),
         activity("contact", `Removed ${contact.name} from contacts`),
         rows.revision,
       );
+      if (!(await one(db, "SELECT id FROM contacts WHERE id=?", cid))) {
+        await syncSearchIndex(env, db, {
+          removeContactId: cid,
+          upsert: [
+            ...tasks.map((row) => ({ type: "task", id: row.id })),
+            ...appointments.map((row) => ({ type: "appointment", id: row.id })),
+          ],
+        });
+      }
       return json({ deleted: cid });
     }
   }
@@ -425,7 +451,9 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         fields.id,
       ),
     );
-    return json({ contact: await getContact(db, fields.id) }, 201);
+    return indexed(env, db, json({ contact: await getContact(db, fields.id) }, 201), {
+      upsert: [{ type: "contact", id: fields.id }],
+    });
   }
   match = path.match(/^\/api\/contacts\/([^/]+)\/notes$/);
   if (match && method === "POST") {
@@ -443,7 +471,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
       "contact_notes",
       activity("note", `Added a note for ${contact.name}`, contact.id),
     );
-    return json({ note }, 201);
+    return indexed(env, db, json({ note }, 201), { upsert: [{ type: "note", id: note.id }] });
   }
   if (method === "GET" && path === "/api/opportunities") {
     const q = optionalText(url.searchParams.get("q"), "Search", 160),
@@ -484,7 +512,9 @@ export async function handleCrm(request, env, { method, path, body, url }) {
       ),
       rows.revision,
     );
-    return json({ opportunity: await getOpportunity(db, fields.id) }, 201);
+    return indexed(env, db, json({ opportunity: await getOpportunity(db, fields.id) }, 201), {
+      upsert: [{ type: "deal", id: fields.id }],
+    });
   }
   match = path.match(/^\/api\/opportunities\/([^/]+)$/);
   if (match) {
@@ -530,9 +560,11 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         ),
         rows.revision,
       );
-      if (previous.stage !== input.stage)
-        await applyStageRules(db, { ...input, id: oid });
-      return json({ opportunity: await getOpportunity(db, oid) });
+      const taskIds =
+        previous.stage === input.stage ? [] : (await applyStageRules(db, { ...input, id: oid })).taskIds;
+      return indexed(env, db, json({ opportunity: await getOpportunity(db, oid) }), {
+        upsert: [{ type: "deal", id: oid }, ...taskIds.map((taskId) => ({ type: "task", id: taskId }))],
+      });
     }
     if (method === "DELETE") {
       await guardedWrite(
@@ -545,7 +577,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         ),
         rows.revision,
       );
-      return json({ deleted: oid });
+      return indexed(env, db, json({ deleted: oid }), { remove: [{ type: "deal", id: oid }] });
     }
   }
   if (method === "GET" && path === "/api/tasks") {
@@ -589,7 +621,9 @@ export async function handleCrm(request, env, { method, path, body, url }) {
     );
     if (Object.prototype.hasOwnProperty.call(body || {}, "recurrence"))
       await rememberRecurrence(db, fields.id, body.recurrence ? recurrenceChoice(body.recurrence) : null, fields.due_date);
-    return json({ task: await getTask(db, fields.id) }, 201);
+    return indexed(env, db, json({ task: await getTask(db, fields.id) }, 201), {
+      upsert: [{ type: "task", id: fields.id }],
+    });
   }
   match = path.match(/^\/api\/tasks\/([^/]+)$/);
   if (match) {
@@ -620,7 +654,9 @@ export async function handleCrm(request, env, { method, path, body, url }) {
       const followUp = await spawnNextRecurrence(db, previous, input);
       const task = await getTask(db, tid);
       task.recurrence = (await loadWorkspace(db)).tasks[tid]?.recurrence || null;
-      return json({ task, followUp });
+      return indexed(env, db, json({ task, followUp }), {
+        upsert: [{ type: "task", id: tid }, ...(followUp ? [{ type: "task", id: followUp }] : [])],
+      });
     }
     if (method === "DELETE") {
       const record = await getTask(db, tid);
@@ -630,7 +666,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         record,
         activity("task", `Deleted task ${record.title}`, record.contact_id),
       );
-      return json({ deleted: tid });
+      return indexed(env, db, json({ deleted: tid }), { remove: [{ type: "task", id: tid }] });
     }
   }
   if (method === "GET" && path === "/api/appointments") {
@@ -658,7 +694,9 @@ export async function handleCrm(request, env, { method, path, body, url }) {
         fields.contact_id,
       ),
     );
-    return json({ appointment: await getAppointment(db, fields.id) }, 201);
+    return indexed(env, db, json({ appointment: await getAppointment(db, fields.id) }, 201), {
+      upsert: [{ type: "appointment", id: fields.id }],
+    });
   }
   match = path.match(/^\/api\/appointments\/([^/]+)$/);
   if (match) {
@@ -679,7 +717,9 @@ export async function handleCrm(request, env, { method, path, body, url }) {
           input.contact_id,
         ),
       );
-      return json({ appointment: await getAppointment(db, aid) });
+      return indexed(env, db, json({ appointment: await getAppointment(db, aid) }), {
+        upsert: [{ type: "appointment", id: aid }],
+      });
     }
     if (method === "DELETE") {
       const record = await getAppointment(db, aid);
@@ -693,7 +733,7 @@ export async function handleCrm(request, env, { method, path, body, url }) {
           record.contact_id,
         ),
       );
-      return json({ deleted: aid });
+      return indexed(env, db, json({ deleted: aid }), { remove: [{ type: "appointment", id: aid }] });
     }
   }
   if (method === "GET" && path === "/api/inbox")

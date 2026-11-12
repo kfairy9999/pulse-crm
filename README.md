@@ -6,7 +6,9 @@ Pulse CRM is an independent, single-owner workspace for contacts, a sales pipeli
 
 The real workspace at [pulse-crm.kfairley9999.workers.dev](https://pulse-crm.kfairley9999.workers.dev) still requires the owner's sign-in. `/demo` never reads the session or the D1 database, and the CRM APIs still return 401 without a session; a Workers test checks both.
 
-The application code in this tree is covered by 45 Node tests and 37 Workers tests (82 total). Three of the Node tests run the demo database through the real CRM handlers, including a duplicate-email write that must fail with 409. GitHub Actions runs `npm test` on pushes and pull requests. That job builds the client and runs the same suites. It has no secrets and it does not deploy.
+The application code in this tree is covered by 58 Node tests and 41 Workers tests (99 total). Three of the Node tests run the demo database through the real CRM handlers, including a duplicate-email write that must fail with 409. Search tests cover keyword fallback, hybrid filters, indexing, the external API, and rate limits. GitHub Actions runs `npm test` on pushes and pull requests. That job builds the client and runs the same suites. It has no secrets and it does not deploy.
+
+Search in this source tree is not in the upload package recorded below. The live site keeps serving that package until a new one is built and uploaded.
 
 `deploy/cloudflare-upload/worker.js` is the live script: 2,018,185 bytes, gzip 721,959, SHA-256 `4f6aa4f438d9ff266ff56bc9932c7df397e075225727972a45f516d29564d659`. It is bigger than before because the lazily loaded demo chunk includes SQLite compiled to JavaScript; the signed-in app does not download it. It was uploaded November 10, 2026, through the Cloudflare API with `keep_bindings` for secrets, so `AUTH_PEPPER`, the D1 binding, the plain-text settings, and the stored records were left unchanged. After the upload, `GET /api/health` returned 200 and anonymous CRM APIs returned 401. No Free-plan CPU or large-board measurement is claimed.
 
@@ -54,6 +56,120 @@ The owner calendar is America/Los_Angeles. “Due in days,” task Today / overd
 
 A follow-up saved by the previous package at 7:45 PM Pacific on Nov 7 is still stored as Nov 9. The upload did not rewrite that row. A new rule uses the Los Angeles day. The existing row can be edited in the task form.
 
+## Search
+
+Search looks across contacts, notes, deals, tasks, and appointments. Deals are the `opportunities` table. The Search page is in the same cream and terracotta layout, and the filters stack on a narrow screen.
+
+**Without `QDRANT_URL`, `QDRANT_API_KEY`, and `GEMINI_API_KEY`**, including the public `/demo`, search is keyword search. The page says so. Matches are words in the workspace. They are not semantic results and they are not model results. `/demo` runs that search in the browser against the sample SQLite database. It does not call the Worker, Qdrant, or Gemini. A recruiter does not need any of those keys.
+
+**With all three secrets**, the Worker embeds text with Gemini `gemini-embedding-2` (768 dimensions) and stores it in a Qdrant collection named `pulse_crm`. Keyword vectors are hashed term weights computed in the Worker. They are not a learned sparse model and they are not Grok embeddings. Qdrant fuses the dense vector and the sparse vector with reciprocal rank fusion. Creating or editing a record upserts that point. Deleting a contact deletes points whose `contactId` is that contact, then rewrites any tasks or appointments that remain. If Qdrant or Gemini fails, the CRM write still saves and the log line is `pulse-search-index` with no record text. A later reindex can catch up. A failed query is labeled keyword search and is not presented as a hybrid result.
+
+The signed-in page can index records that were saved before the keys existed. Each call sends at most 20 records to Gemini. Four calls are allowed per hour.
+
+### Secrets
+
+These are Worker secrets. They are not in `wrangler.jsonc` and they must not be committed. This repository does not create a Qdrant Cloud account.
+
+Production, from a machine that is already logged in to the Cloudflare account that owns the Worker:
+
+```bash
+npx wrangler secret put QDRANT_URL
+npx wrangler secret put QDRANT_API_KEY
+npx wrangler secret put GEMINI_API_KEY
+npx wrangler secret put SEARCH_API_TOKEN
+```
+
+`QDRANT_URL` is the cluster origin only, such as `https://example.region.cloud.qdrant.io:6333`. `http://` is accepted only for `localhost` or `127.0.0.1`. `GEMINI_API_KEY` is a Google AI Studio key for the Gemini API. The Worker calls `gemini-embedding-2` with `output_dimensionality` 768. `SEARCH_API_TOKEN` is a separate random string of at least 32 characters. Generate it the same way as the local pepper and do not reuse the Qdrant key, the Gemini key, or `AUTH_PEPPER`.
+
+Local Wrangler reads the same names from `.dev.vars`, which Git ignores. The names are commented in `.dev.vars.example`. Leave them unset to stay on keyword search.
+
+Qdrant 1.15 or newer is the version this client is written for. Hybrid queries need the Query API, and the collection uses the `idf` sparse modifier.
+
+### Collection and payload
+
+Collection: `pulse_crm`.
+
+| Vector | Name | What it is |
+| --- | --- | --- |
+| Dense | `dense` | 768 floats, cosine, from Gemini `gemini-embedding-2` |
+| Sparse | `sparse` | Hashed term weights from this Worker, IDF modifier |
+
+Payload schema version 1:
+
+| Field | Meaning |
+| --- | --- |
+| `recordType` | `contact`, `note`, `deal`, `task`, or `appointment` |
+| `recordId` | Id in D1 |
+| `contactId` | The contact, or null. A contact point uses its own id |
+| `dealId` | The deal id, or null. Only deals have one |
+| `stage` | Pipeline stage, or null |
+| `title` | Short label |
+| `snippet` | At most 280 characters for display |
+| `date` | Filter instant. Task due dates use that calendar day at 12:00 UTC. Appointments use `starts_at` |
+| `updatedAt` | Record timestamp |
+
+The text sent to Gemini can include names, companies, emails, phones, tags, and note bodies. The payload stores the snippet, not a second full copy. The embedding itself is derived from that text.
+
+### Other applications
+
+Other apps should call this Worker, not Qdrant. The Worker applies the same embedding and the same filters.
+
+`POST /api/v1/search`
+
+`Authorization: Bearer <SEARCH_API_TOKEN>`
+
+`Content-Type: application/json`
+
+There is no CORS header. Call it from a server. A browser page on another origin cannot read the response. The token is not an owner session and cannot create records or reindex. Anyone who has the token can read search snippets, which include note text. Treat it as read access.
+
+```bash
+curl -sS https://pulse-crm.kfairley9999.workers.dev/api/v1/search \
+  -H "Authorization: Bearer $SEARCH_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"q":"proposal","type":"note","contactId":"CONTACT_UUID","from":"2026-11-01","to":"2026-11-30","limit":10}'
+```
+
+That host serves search only after a worker that includes this code is uploaded and the secrets are set. Until then the route is not on the live package.
+
+Body fields: `q` (required, at most 300 characters), `type`, `contactId`, `dealId`, `stage`, `from`, `to`, `limit` (1–20, default 12). `from` and `to` are `YYYY-MM-DD` or an ISO timestamp. A date-only value covers that UTC day. `stage` is one of New Lead, Contacted, Booked, Proposal, Won, Lost.
+
+A `contactId` filter is sent to both Qdrant prefetches and applied again to the points Qdrant returns. A point for a different contact is dropped. `dealId` matches only that deal. Notes do not have a deal id, so a deal filter does not return them. `type` and `stage` work the same way.
+
+Response when hybrid search ran:
+
+```json
+{
+  "mode": "hybrid",
+  "label": "Hybrid search. Dense vectors are Gemini gemini-embedding-2 at 768 dimensions. Keyword vectors are hashed term weights from this Worker. Qdrant combines them with reciprocal rank fusion.",
+  "embeddingModel": "gemini-embedding-2",
+  "collection": "pulse_crm",
+  "fusion": "rrf",
+  "filters": { "q": "proposal", "type": "note", "contactId": "CONTACT_UUID", "dealId": null, "stage": null, "from": "2026-11-01T00:00:00.000Z", "to": "2026-11-30T23:59:59.999Z" },
+  "results": [
+    { "recordType": "note", "recordId": "NOTE_UUID", "contactId": "CONTACT_UUID", "dealId": null, "stage": null, "title": "Note · Ava Martinez", "snippet": "…", "date": "2026-11-05T16:30:00.000Z", "score": 0.5 }
+  ]
+}
+```
+
+Without the Qdrant and Gemini secrets, the same request with a valid token returns `"mode": "keyword"`, `"embeddingModel": null`, and a label that says these are text matches. `score` is then a term count, not a fusion score.
+
+Limits: 10 requests per 10 minutes for each client IP and for the token. The 11th responds `429` with `Retry-After`. Signed-in hybrid search is 20 requests per 10 minutes. Reindex is 4 requests per hour. Keyword search for the signed-in owner is not counted, because it does not call Gemini or Qdrant.
+
+Reindex is owner-only:
+
+```bash
+curl -sS https://YOUR_ORIGIN/api/search/reindex \
+  -H "Origin: https://YOUR_ORIGIN" \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: $CSRF" \
+  -H "Cookie: __Host-pulse_session=$SESSION; __Host-pulse_csrf=$CSRF" \
+  -d '{"offset":0}'
+```
+
+Repeat with `nextOffset` until it is null. The external token cannot call this route.
+
+Signed-in search is `GET /api/search` with the same fields. `GET /api/search/status` reports `keyword` or `hybrid` and does not reveal secret values.
+
 ## What it does
 
 - **Contacts.** Create, edit, search, and delete people. Tags, company, job title, and append-only notes. A blank Tags field means no tags. Saved views are stored filter chips. Company names are grouped on Reports. Each contact has a History tab of linked activity.
@@ -64,6 +180,7 @@ A follow-up saved by the previous package at 7:45 PM Pacific on Nov 7 is still s
 - **Reports.** Stage counts and values, won and lost totals, overdue follow-ups, and companies, all from records in this workspace.
 - **Backup and CSV.** Preview backup checks the file shape and shows counts, then the browser downloads JSON. There is no restore button. Contact CSV export and a preview-then-commit import accept at most 100 rows. Rows whose email already exists are skipped and not overwritten. Invalid rows are reported and not inserted. A field that starts with `=`, `+`, `-`, `@`, tab, or carriage return is prefixed with a quote so a spreadsheet does not treat it as a formula. Password hashes, session tokens, and secrets are rejected from a backup preview and are not exported.
 - **Overview.** Open pipeline, won value, contact count, open tasks, a record-month chart, recent activity, and upcoming appointments. The chart is not a historical accounting ledger.
+- **Search.** Keyword search over contacts, notes, deals, tasks, and appointments when Qdrant is not configured. Hybrid Qdrant search when `QDRANT_URL`, `QDRANT_API_KEY`, and `GEMINI_API_KEY` are set. The page labels which one you are looking at.
 - **Inbox and Workflows.** Inbox reads and writes local contact notes. Workflows states that automations are not connected.
 
 A new database starts empty. There is no automatic sample owner and no public demo login.
@@ -81,6 +198,8 @@ It also does not:
 - run external webhooks or background jobs that send anything
 - offer multi-factor authentication, password reset, or more than one owner
 - promise a Free-tier CPU budget for every board size (large boards were not measured)
+- run semantic or vector search unless Qdrant and a Gemini embedding key are configured on the Worker
+- call Qdrant or Gemini from `/demo`
 
 Back up the Cloudflare D1 database with the provider’s own export, on a copy you control, before treating the workspace as the only copy of business records. That export contains private CRM data and must stay out of this repository.
 
@@ -91,6 +210,8 @@ Back up the Cloudflare D1 database with the provider’s own export, on a copy y
 | React 19 and Vite | Static client |
 | Cloudflare Worker | Native Fetch router, one ES module |
 | Cloudflare D1 | SQLite database for the CRM, owner, sessions, and throttles |
+| Qdrant, optional | Hybrid search index. Unused when `QDRANT_URL` or `QDRANT_API_KEY` is absent |
+| Gemini `gemini-embedding-2`, optional | Dense embeddings for that index. Unused when `GEMINI_API_KEY` is absent. Not a Grok embedding |
 | Workers Free | The intended plan. No KV, R2, Durable Objects, Queues, Workflows, or paid CPU limit |
 | Browser PBKDF2-SHA256, 600,000 iterations | Derives the login credential on the device |
 | Worker HMAC-SHA256 | Peppered verifier stored in D1. The pepper is a Cloudflare secret, not a file in this repo |
@@ -121,7 +242,7 @@ Anonymous `/` redirects to `/signin`. CRM APIs require an owner session. Cookies
 
 The derived credential is password-equivalent. It must stay on HTTPS and out of logs and browser storage. This is not a PAKE and not a server-side memory-hard password hash. A person who has both the database and the pepper can guess offline. A compromised browser can capture a password.
 
-Local secrets are placeholders in `.dev.vars.example`. Copy that file to `.dev.vars`, which Git ignores, and replace both placeholders with separate random 32-byte values you generate yourself. Do not reuse a production secret, and do not commit `.dev.vars`, `.env`, a database, or a backup. Production `AUTH_PEPPER` stays in Cloudflare’s secret storage. `SETUP_TOKEN` is a one-time bootstrap key and is removed after the owner exists. This repository does not contain those values.
+Local secrets are placeholders in `.dev.vars.example`. Copy that file to `.dev.vars`, which Git ignores, and replace both placeholders with separate random 32-byte values you generate yourself. Do not reuse a production secret, and do not commit `.dev.vars`, `.env`, a database, or a backup. Production `AUTH_PEPPER` stays in Cloudflare’s secret storage. `SETUP_TOKEN` is a one-time bootstrap key and is removed after the owner exists. Optional search secrets are `QDRANT_URL`, `QDRANT_API_KEY`, `GEMINI_API_KEY`, and `SEARCH_API_TOKEN`. Leave them unset for keyword search. This repository does not contain those values.
 
 ## Phone layout
 
@@ -155,7 +276,7 @@ Open `https://127.0.0.1:8787/signin`, accept the local certificate, and create a
 ## Tests
 
 ```bash
-npm test                 # build, 45 Node tests, then 37 workerd/D1 tests
+npm test                 # build, 58 Node tests, then 41 workerd/D1 tests
 npm run test:legacy      # Node tests only; run npm run build first so the bundle render test can read dist/
 npm run test:worker      # build, then the workerd suite
 npm run test:smoke       # local Wrangler HTTP checks, static-assets mode
@@ -177,4 +298,4 @@ This repository was developed with AI coding assistance in Cursor. Commits list 
 
 ## Source map
 
-`src/client/` React UI · `test/workers/` workerd coverage · `dist/` generated assets, not committed · `deploy/cloudflare-upload/` the multipart upload package · `wrangler.jsonc` local assets binding · `wrangler.bundle.jsonc` the no-assets package config · `wrangler.test.jsonc` tests only.
+`src/client/` React UI · `src/search.js` keyword search, Qdrant, and Gemini embeddings · `test/workers/` workerd coverage · `dist/` generated assets, not committed · `deploy/cloudflare-upload/` the multipart upload package · `wrangler.jsonc` local assets binding · `wrangler.bundle.jsonc` the no-assets package config · `wrangler.test.jsonc` tests only.
